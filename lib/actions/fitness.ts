@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
+import { callProjectYouAI, hasCloudAI } from "@/lib/ai/provider";
 
 type Exercise = { name: string; sets: string; reps: string; rest?: string };
 type PlanSession = { key: string; day: string; dayIndex: number; title: string; focus: string; duration: number; exercises: Exercise[] };
@@ -35,30 +35,31 @@ export async function generateWorkoutPlan(formData: FormData) {
   if (!user) return { error: "Sign in again." };
 
   let schedule = fallbackPlan(goal, days, minutes);
-  let source = "project_you";
+  let planTitle = `${days}-Day ${titleCase(goal)} Plan`;
+  let source = "project_you_fallback";
 
-  if (isClaudeConfigured()) {
+  if (hasCloudAI()) {
     try {
-      const response = await callClaude({
-        system: "You are the Project You+ fitness planning engine. Build practical general-fitness plans for healthy adults. Avoid medical claims, unsafe max-effort prescriptions, and excessive volume. Return valid JSON only, no markdown.",
-        messages: [{ role: "user", content: `Create a ${days}-day-per-week workout plan for a ${experience} user. Goal: ${goal}. Session length: about ${minutes} minutes. Return exactly {"title":"...","schedule":[{"day":"Monday","dayIndex":1,"title":"...","focus":"...","duration":50,"exercises":[{"name":"...","sets":"3","reps":"8-10","rest":"90 sec"}]}]}. Use dayIndex 0=Sunday through 6=Saturday. Include 4-7 exercises per session and distribute recovery sensibly.` }],
-        maxTokens: 1800,
-        temperature: 0.2,
+      const result = await callProjectYouAI({
+        system: "You are the Project You+ training planner. Build practical general-fitness plans for healthy adults from the user's stated goal, experience, training frequency, and available session time. Avoid medical claims, max-effort testing, extreme volume, or pretending to know injuries/equipment not provided. Return valid JSON only, without markdown.",
+        messages: [{ role: "user", content: `Create a ${days}-day-per-week workout plan for a ${experience} user. Goal: ${goal}. Session length: about ${minutes} minutes. Return exactly {"title":"...","schedule":[{"key":"day-1","day":"Monday","dayIndex":1,"title":"...","focus":"...","duration":${minutes},"exercises":[{"name":"...","sets":"3","reps":"8-10","rest":"90 sec"}]}]}. Use dayIndex 0=Sunday through 6=Saturday. Include 4-7 exercises per session, distribute recovery sensibly, and return exactly ${days} sessions.` }],
+        maxTokens: 1900,
       });
-      const parsed = JSON.parse(response.replace(/```json|```/g, "").trim()) as { title?: string; schedule?: PlanSession[] };
+      const parsed = JSON.parse(result.text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim()) as { title?: string; schedule?: PlanSession[] };
       if (Array.isArray(parsed.schedule) && parsed.schedule.length === days) {
         schedule = parsed.schedule.map((session, index) => normalizeSession(session, index, minutes));
-        source = "claude";
+        planTitle = String(parsed.title || planTitle).slice(0, 120);
+        source = result.provider;
       }
-    } catch {
-      source = "project_you_fallback";
+    } catch (error) {
+      console.error("Workout plan cloud AI fallback:", error);
     }
   }
 
   await supabase.from("workout_plans").update({ active: false }).eq("user_id", user.id).eq("active", true);
   const { error } = await supabase.from("workout_plans").insert({
     user_id: user.id,
-    title: `${days}-Day ${titleCase(goal)} Plan`,
+    title: planTitle,
     goal,
     days_per_week: days,
     session_minutes: minutes,
@@ -72,6 +73,7 @@ export async function generateWorkoutPlan(formData: FormData) {
   revalidatePath("/fitness");
   revalidatePath("/health");
   revalidatePath("/dashboard");
+  revalidatePath("/coach");
   return { error: null };
 }
 
@@ -90,6 +92,7 @@ export async function completeWorkoutPlanSession(planId: string, sessionKey: str
   revalidatePath("/fitness");
   revalidatePath("/health");
   revalidatePath("/dashboard");
+  revalidatePath("/review");
 }
 
 function normalizeSession(session: PlanSession, index: number, minutes: number): PlanSession {
