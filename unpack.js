@@ -1,30 +1,33 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const crypto = require("crypto");
 
 const root = process.cwd();
-const partNames = [
-  "source.bundle.part1",
-  "source.bundle.part2",
-  "source.bundle.part3",
-  "source.bundle.part4a",
-  "source.bundle.part4b",
-  "source.bundle.part5",
-];
+const parts = Array.from({ length: 9 }, (_, i) =>
+  path.join(root, "bundle-v7", `part${String(i + 1).padStart(2, "0")}`)
+);
 
-for (const partName of partNames) {
-  if (!fs.existsSync(path.join(root, partName))) {
-    console.error(`Project You+ source bundle is missing ${partName}.`);
+for (const part of parts) {
+  if (!fs.existsSync(part)) {
+    console.error(`Missing Project You+ bundle part: ${part}`);
     process.exit(1);
   }
 }
 
-const encoded = partNames
-  .map((partName) => fs.readFileSync(path.join(root, partName), "utf8").trim())
-  .join("");
+const encoded = parts.map((p) => fs.readFileSync(p, "utf8").trim()).join("");
+const gz = Buffer.from(encoded, "base64");
 
-const archive = zlib.gunzipSync(Buffer.from(encoded, "base64"));
-const files = JSON.parse(archive.toString("utf8"));
+const sha = crypto.createHash("sha256").update(gz).digest("hex");
+const expected = "cd30699b50410970382844e615a8c785351fbfcb59cd6f17ce782428ae803e2f";
+
+if (sha !== expected) {
+  console.error(`Project You+ source checksum mismatch: ${sha}`);
+  process.exit(1);
+}
+
+const raw = zlib.gunzipSync(gz);
+const files = JSON.parse(raw.toString("utf8"));
 
 for (const [relativePath, contentBase64] of Object.entries(files)) {
   const target = path.join(root, relativePath);
