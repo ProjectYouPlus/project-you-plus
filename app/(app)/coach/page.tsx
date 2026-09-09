@@ -1,10 +1,20 @@
 import { CoachChat } from "@/components/coach/coach-chat";
+import { getGoals } from "@/lib/data/goals";
+import { getTasks } from "@/lib/data/tasks";
+import { getHabits } from "@/lib/data/habits";
 
-export default function CoachPage() {
-  return (
-    <main className="py-shell-narrow">
-      <header className="mb-5"><div className="py-eyebrow mb-2 text-accent-text">Your personal chief of staff</div><h1 className="py-title">AI Coach</h1><p className="py-subtitle max-w-[620px]">Ask about your goals, schedule, habits, health, money or what to do next. Your coach reasons from your Project You+ context.</p></header>
-      <section className="py-card overflow-hidden"><CoachChat /></section>
-    </main>
-  );
+export default async function CoachPage() {
+  const [goals,tasks,habits]=await Promise.all([getGoals(),getTasks(),getHabits()]);
+  const activeGoals=goals.filter(g=>g.status==="active");
+  const openTasks=tasks.filter(t=>!t.completedAt);
+  const linkedTasks=openTasks.filter(t=>t.goalId).length;
+  const linkedHabits=habits.filter(h=>h.goalId).length;
+  const contextReady=activeGoals.length+tasks.length+habits.length>0;
+  const signal=!activeGoals.length?"Start with one real goal. Without a destination, coaching can only be generic.":!openTasks.length?`Your clearest move is to give “${activeGoals[0].title}” one concrete next action.`:linkedTasks<openTasks.length?`${openTasks.length-linkedTasks} open action${openTasks.length-linkedTasks===1?" is":"s are"} not linked to a goal. Clean that up before adding more work.`:habits.length>0&&linkedHabits===0?"Your tasks have direction, but your habits do not yet support a goal. Link one repeatable behavior to an outcome.":`Your system has ${activeGoals.length} active goal${activeGoals.length===1?"":"s"}, ${openTasks.length} open action${openTasks.length===1?"":"s"}, and ${habits.length} habit${habits.length===1?"":"s"}. Ask me where the leverage is.`;
+  const summary=contextReady?`${activeGoals.length} active goal${activeGoals.length===1?"":"s"}, ${openTasks.length} open action${openTasks.length===1?"":"s"}, ${habits.length} habit${habits.length===1?"":"s"}.`:"Your account is still mostly empty. I’ll help you build the system before pretending there is enough data to analyze.";
+  return <main className="py-mobile-shell md:py-shell-narrow">
+    <header className="py-animate-in mb-6"><div className="py-eyebrow mb-1.5 text-accent-text">Your personal chief of staff</div><h1 className="py-title">Coach</h1><p className="py-subtitle max-w-[620px]">Decide what matters, turn goals into a plan, and learn from the patterns in your real Project You+ context.</p></header>
+    <section className="py-glass-hero py-animate-in py-stagger-1 mb-4 p-5"><div className="flex items-start gap-3"><span className="py-pulse-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-accent-2"/><div><div className="py-eyebrow text-[#C8AEFF]">Coach signal</div><p className="m-0 mt-2 text-[14px] font-medium leading-relaxed text-white">{signal}</p></div></div></section>
+    <section className="py-glass-soft py-animate-in py-stagger-2 overflow-hidden"><CoachChat contextSummary={summary} contextReady={contextReady}/></section>
+  </main>
 }
