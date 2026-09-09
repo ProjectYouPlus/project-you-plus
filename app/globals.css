@@ -116,7 +116,29 @@ a { text-decoration: none; }
   .py-pressable:hover { transform: translateY(-1px); }
   .py-pressable:active { transform: scale(.988); }
   .py-empty-icon { @apply flex h-11 w-11 items-center justify-center rounded-[15px] text-[16px] font-bold text-accent-text; border: 1px solid rgba(169,112,255,.18); background: rgba(139,92,246,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+  .py-command-row { @apply flex min-h-[62px] items-center gap-3 border-t border-white/[.055] py-3 first:border-t-0; }
+  .py-check { @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/[.16] bg-white/[.025] text-[12px] font-bold text-white transition; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+  .py-check:not(:disabled):hover { border-color: rgba(169,112,255,.52); background: rgba(139,92,246,.11); }
+  .py-check:not(:disabled):active { transform: scale(.90); }
+  .py-check-done { border-color: rgba(54,217,139,.34); background: rgba(54,217,139,.15); color: #5CF0A5; box-shadow: 0 0 18px rgba(54,217,139,.10), inset 0 1px 0 rgba(255,255,255,.10); }
 }
+
+.py-trajectory-card { position:relative; overflow:hidden; border-radius:30px; border:1px solid rgba(255,255,255,.105); padding:20px; background: radial-gradient(circle at 19% 16%,rgba(169,112,255,.23),transparent 34%), radial-gradient(circle at 95% 92%,rgba(82,35,145,.24),transparent 38%), linear-gradient(145deg,rgba(24,19,40,.89),rgba(10,9,17,.92)); box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 30px 90px rgba(31,12,66,.34); -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%); }
+.py-trajectory-card::after { content:""; position:absolute; inset:-45% 52% 42% -22%; pointer-events:none; transform:rotate(-18deg); background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent); filter:blur(4px); }
+.py-calendar-nav { display:flex; width:30px; height:30px; align-items:center; justify-content:center; border-radius:999px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.035); color:var(--text-2); font-size:18px; transition:all .2s ease; }
+.py-calendar-nav:not(:disabled):hover { border-color:rgba(169,112,255,.28); color:var(--text-1); background:rgba(139,92,246,.08); }
+.py-calendar-nav:disabled { opacity:.25; }
+.py-calendar-day { position:relative; display:flex; min-height:58px; flex-direction:column; align-items:center; justify-content:center; border-radius:13px; border:1px solid transparent; background:rgba(255,255,255,.018); transition:transform .2s cubic-bezier(.22,1,.36,1),border-color .2s ease,background .25s ease,box-shadow .25s ease; }
+.py-calendar-day:not(:disabled):hover { transform:translateY(-1px); border-color:rgba(255,255,255,.11); }
+.py-calendar-day-active { border-color:rgba(196,181,253,.55)!important; box-shadow:0 0 0 1px rgba(139,92,246,.16),0 8px 28px rgba(76,29,149,.24)!important; }
+.py-calendar-future { background:rgba(255,255,255,.018); }
+.py-calendar-empty { background:rgba(255,255,255,.022); }
+.py-calendar-light { background:linear-gradient(145deg,rgba(233,213,255,.10),rgba(196,181,253,.045)); border-color:rgba(233,213,255,.045); }
+.py-calendar-building { background:linear-gradient(145deg,rgba(169,112,255,.20),rgba(109,40,217,.10)); border-color:rgba(169,112,255,.10); }
+.py-calendar-strong { background:linear-gradient(145deg,rgba(124,58,237,.43),rgba(76,29,149,.30)); border-color:rgba(169,112,255,.17); box-shadow:inset 0 1px 0 rgba(255,255,255,.07); }
+.py-calendar-elite { background:linear-gradient(145deg,rgba(91,33,182,.78),rgba(59,18,117,.68)); border-color:rgba(196,181,253,.28); box-shadow:inset 0 1px 0 rgba(255,255,255,.11),0 8px 24px rgba(76,29,149,.22); }
+.py-day-dot { display:block; width:3px; height:3px; border-radius:999px; }
+.py-source-dot { display:block; width:8px; height:8px; flex:0 0 auto; border-radius:999px; box-shadow:0 0 10px currentColor; }
 .py-animate-in { animation: pyRise .48s cubic-bezier(.22,1,.36,1) both; }
 .py-fade-in { animation: pyFade .38s ease-out both; }
 .py-stagger-1 { animation-delay: 50ms; } .py-stagger-2 { animation-delay: 100ms; } .py-stagger-3 { animation-delay: 150ms; } .py-stagger-4 { animation-delay: 200ms; } .py-stagger-5 { animation-delay: 250ms; }
@@ -124,5 +146,6 @@ a { text-decoration: none; }
 @keyframes pyRise { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.992); filter: blur(3px); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
 @keyframes pyFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pyPulse { 0%,100% { opacity:.65; transform:scale(.92); box-shadow:0 0 0 0 rgba(139,92,246,.18);} 50% { opacity:1; transform:scale(1); box-shadow:0 0 0 7px rgba(139,92,246,0);} }
+@media (max-width:420px){ .py-trajectory-card{padding:18px 16px}.py-calendar-day{min-height:54px;border-radius:11px} }
 @media (max-width:767px){ body{background-color:var(--bg);} .py-card{box-shadow:none;} }
 @media (prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;} }
