@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="arm" x1="80" y1="94" x2="365" y2="370" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A78BFA"/>
+      <stop offset="0.52" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <path d="M80 112L216 257L381 84L305 181L305 329L232 425L232 376L80 220V112Z" fill="url(#arm)"/>
+  <path d="M232 257L305 181V329L232 425V257Z" fill="#7C3AED"/>
+  <rect x="364" y="306" width="97" height="32" rx="16" fill="#A78BFA"/>
+  <rect x="396.5" y="273.5" width="32" height="97" rx="16" fill="#A78BFA"/>
+</svg>

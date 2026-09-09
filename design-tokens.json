@@ -1,0 +1,36 @@
+{
+  "brand": "Project You+",
+  "tagline": "A better you, every day.",
+  "color": {
+    "dark": {
+      "background": "#050509",
+      "surface": "#0D0D14",
+      "elevated": "#151521",
+      "elevated2": "#1B1B29",
+      "primary": "#8B5CF6",
+      "primaryBright": "#A970FF",
+      "text": "#FFFFFF",
+      "muted": "#9A9AA8",
+      "subtle": "#6F6F7D",
+      "border": "#292938"
+    },
+    "light": {
+      "background": "#FAFAFF",
+      "surface": "#FFFFFF",
+      "elevated": "#F1F5F9",
+      "primary": "#7C3AED",
+      "text": "#0F172A",
+      "muted": "#64748B"
+    },
+    "semantic": {
+      "success": "#36D98B",
+      "warning": "#FFB84D",
+      "danger": "#FF5C6C",
+      "info": "#3B82F6"
+    }
+  },
+  "radius": { "xs": 8, "sm": 12, "md": 16, "lg": 20, "xl": 24, "pill": 999 },
+  "spacing": [4, 8, 12, 16, 20, 24, 32, 40],
+  "typography": { "family": "Inter", "weights": [400, 500, 600, 700] },
+  "touchTargetMin": 44
+}
