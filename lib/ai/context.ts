@@ -2,71 +2,12 @@ import { getProfile } from "@/lib/data/profile";
 import { getGoals } from "@/lib/data/goals";
 import { getTasks } from "@/lib/data/tasks";
 import { getHabits } from "@/lib/data/habits";
-import { mockHealth, mockMoney, mockSchedule } from "@/lib/mock-data";
 import { calculateOnePercentScore } from "@/lib/score";
 import { buildProactiveInsights } from "@/lib/insights";
+import { createClient } from "@/lib/supabase/server";
 import type { CalendarEvent, Goal, Habit, HealthSnapshot, MoneySnapshot, Profile, Task } from "@/lib/types";
 
-export interface ProjectYouContext {
-  profile: Profile;
-  goals: Goal[];
-  tasks: Task[];
-  habits: Habit[];
-  health: HealthSnapshot;
-  money: MoneySnapshot;
-  schedule: CalendarEvent[];
-  score: ReturnType<typeof calculateOnePercentScore>;
-  insights: ReturnType<typeof buildProactiveInsights>;
-  generatedAt: string;
-}
-
-export async function buildProjectYouContext(): Promise<ProjectYouContext> {
-  const [profile, goals, tasks, habits] = await Promise.all([
-    getProfile(),
-    getGoals(),
-    getTasks(),
-    getHabits(),
-  ]);
-
-  const score = calculateOnePercentScore({
-    goals,
-    tasks,
-    habits,
-    health: mockHealth,
-    money: mockMoney,
-  });
-
-  return {
-    profile,
-    goals,
-    tasks,
-    habits,
-    health: mockHealth,
-    money: mockMoney,
-    schedule: mockSchedule,
-    score,
-    insights: buildProactiveInsights({ score, tasks, goals, habits }),
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-export function compactContext(context: ProjectYouContext) {
-  return {
-    user: {
-      name: context.profile.fullName,
-      timezone: context.profile.timezone,
-      blueprint: context.profile.blueprint,
-    },
-    onePercentScore: context.score.score,
-    scoreBreakdown: context.score.score.breakdown,
-    scoreRationale: context.score.rationale,
-    goals: context.goals.map(({ id, title, category, target, deadline, progress, objective90day, status }) => ({ id, title, category, target, deadline, progress, objective90day, status })),
-    tasks: context.tasks.map(({ id, title, tier, dueAt, completedAt, goalId, meta }) => ({ id, title, tier, dueAt, completedAt, goalId, meta })),
-    habits: context.habits,
-    health: context.health,
-    money: context.money,
-    schedule: context.schedule,
-    proactiveInsights: context.insights.map((i) => i.content),
-    generatedAt: context.generatedAt,
-  };
-}
+export interface ProjectYouContext { profile: Profile; goals: Goal[]; tasks: Task[]; habits: Habit[]; health: HealthSnapshot; money: MoneySnapshot; schedule: CalendarEvent[]; score: ReturnType<typeof calculateOnePercentScore>; insights: ReturnType<typeof buildProactiveInsights>; generatedAt: string; }
+export async function buildProjectYouContext(): Promise<ProjectYouContext> { const [profile, goals, tasks, habits, live] = await Promise.all([ getProfile(), getGoals(), getTasks(), getHabits(), getLiveContext() ]); const score = calculateOnePercentScore({ goals, tasks, habits, health: live.health, money: live.money }); return { profile, goals, tasks, habits, health: live.health, money: live.money, schedule: live.schedule, score, insights: buildProactiveInsights({ score, tasks, goals, habits }), generatedAt: new Date().toISOString() }; }
+async function getLiveContext(){ const supabase=await createClient(); const now=new Date(); const dayStart=new Date(now);dayStart.setHours(0,0,0,0); const dayEnd=new Date(dayStart);dayEnd.setDate(dayEnd.getDate()+1); const weekStart=new Date(dayStart);weekStart.setDate(weekStart.getDate()-6); const [{data:metrics},{data:workouts},{data:events},{data:transactions},{data:budgets},{data:bills}]=await Promise.all([ supabase.from("health_metrics").select("metric_type,value,recorded_at").order("recorded_at",{ascending:false}).limit(100), supabase.from("workouts").select("id").gte("performed_at",dayStart.toISOString()).lt("performed_at",dayEnd.toISOString()), supabase.from("calendar_events").select("id,title,start_at,end_at,location").gte("start_at",dayStart.toISOString()).lt("start_at",dayEnd.toISOString()).order("start_at"), supabase.from("transactions").select("amount,occurred_at").gte("occurred_at",weekStart.toISOString()), supabase.from("budgets").select("monthly_limit"), supabase.from("bills").select("name,due_date,paid").eq("paid",false).gte("due_date",dayStart.toISOString().slice(0,10)).order("due_date").limit(1) ]); const latest=new Map<string,number>();for(const m of metrics??[]){if(!latest.has(m.metric_type))latest.set(m.metric_type,Number(m.value))} const weeklySpend=Math.abs((transactions??[]).filter(t=>Number(t.amount)<0).reduce((s,t)=>s+Number(t.amount),0)); const monthlyBudget=(budgets??[]).reduce((s,b)=>s+Number(b.monthly_limit??0),0); const health:HealthSnapshot={sleepMinutes:latest.get("sleep_minutes")??0,sleepTargetMinutes:480,recoveryPct:latest.get("recovery_pct")??0,steps:latest.get("steps")??0,stepsTarget:10000,waterCups:latest.get("water_cups")??0,waterTargetCups:10,workoutStatus:(workouts??[]).length?"completed":"missed",nutritionStatus:"under"}; const money:MoneySnapshot={spentTodayCents:Math.round(Math.abs((transactions??[]).filter(t=>new Date(t.occurred_at)>=dayStart&&Number(t.amount)<0).reduce((s,t)=>s+Number(t.amount),0))*100),weeklyBudgetPctUsed:monthlyBudget>0?Math.min(100,Math.round((weeklySpend/(monthlyBudget/4.33))*100)):0,nextBillLabel:bills?.[0]?.name??null,savingsGoalPct:0}; const schedule:CalendarEvent[]=(events??[]).map(e=>({id:e.id,title:e.title,startAt:e.start_at,endAt:e.end_at,location:e.location,isCurrent:new Date(e.start_at)<=now&&new Date(e.end_at)>=now})); return {health,money,schedule}; }
+export function compactContext(context: ProjectYouContext) { return { user: { name: context.profile.fullName, timezone: context.profile.timezone, blueprint: context.profile.blueprint }, onePercentScore: context.score.score, scoreBreakdown: context.score.score.breakdown, scoreRationale: context.score.rationale, goals: context.goals.map(({ id, title, category, target, deadline, progress, objective90day, status }) => ({ id, title, category, target, deadline, progress, objective90day, status })), tasks: context.tasks.map(({ id, title, tier, dueAt, completedAt, goalId, meta }) => ({ id, title, tier, dueAt, completedAt, goalId, meta })), habits: context.habits, health: context.health, money: context.money, schedule: context.schedule, proactiveInsights: context.insights.map((i) => i.content), generatedAt: context.generatedAt }; }

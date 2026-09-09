@@ -1,0 +1,4 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+export async function addWorkout(formData:FormData){ const title=String(formData.get("title")??"").trim();const type=String(formData.get("type")??"strength");const duration=Number(formData.get("duration")); if(!title)return{error:"Name the workout."};if(!Number.isFinite(duration)||duration<=0)return{error:"Enter a valid duration."}; const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)return{error:"Sign in again."}; const{error}=await supabase.from("workouts").insert({user_id:user.id,title,type,duration_minutes:duration,source:"manual"});if(error)return{error:error.message}; revalidatePath("/fitness");revalidatePath("/you");return{error:null}; }

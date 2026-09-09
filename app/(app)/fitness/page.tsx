@@ -1,24 +1,3 @@
-import { mockHealth, mockSchedule } from "@/lib/mock-data";
-
-const RECENT_WORKOUTS = [
-  { title: "Upper body", date: "Today · 7:00 AM", duration: "45 min", score: "Strong" },
-  { title: "Long run · 6 miles", date: "Yesterday", duration: "58 min", score: "On plan" },
-  { title: "Lower body", date: "3 days ago", duration: "50 min", score: "Strong" },
-];
-
-export default function FitnessPage() {
-  const nextWorkout = mockSchedule.find((e) => e.title.toLowerCase().includes("workout"));
-  return (
-    <main className="py-shell-narrow">
-      <header className="mb-7"><div className="py-eyebrow mb-2">Body</div><h1 className="py-title">Fitness</h1><p className="py-subtitle">Train with context from recovery, consistency and your current goals.</p></header>
-      <div className="mb-5 grid gap-4 sm:grid-cols-3">
-        <Metric label="Recovery" value={`${mockHealth.recoveryPct}%`} sub="Ready to train" tone="positive" />
-        <Metric label="Weekly consistency" value="84%" sub="4 sessions planned" />
-        <Metric label="Current streak" value="12d" sub="Personal best: 18" />
-      </div>
-      {nextWorkout && <section className="py-accent-card mb-5 p-5"><div className="py-section-label text-accent-text">Project You+ Action</div><h2 className="py-section-title">Keep the workout as planned</h2><p className="mb-0 mt-2 text-[13.5px] leading-6 text-text-2">Recovery supports today’s upper-body session. Keep intensity normal and avoid adding volume just because readiness is high.</p></section>}
-      <section className="py-card p-5 sm:p-6"><div className="py-section-label">Recent workouts</div><h2 className="py-section-title mb-4">Consistency over intensity</h2>{RECENT_WORKOUTS.map((w)=><div key={w.title} className="flex items-center justify-between border-b border-border py-3.5 last:border-b-0"><div><div className="text-[14px] font-semibold text-text-1">{w.title}</div><div className="mt-1 text-[12px] text-text-3">{w.date}</div></div><div className="text-right"><div className="text-[13px] font-semibold text-text-1">{w.duration}</div><div className="mt-1 text-[11.5px] text-positive">{w.score}</div></div></div>)}</section>
-    </main>
-  );
-}
-function Metric({label,value,sub,tone}:{label:string;value:string;sub:string;tone?:"positive"}){return <div className="py-card p-5"><div className="py-section-label">{label}</div><div className={`mt-2 text-[32px] font-bold tracking-tight ${tone?"text-positive":"text-text-1"}`}>{value}</div><div className="mt-1 text-[12.5px] text-text-3">{sub}</div></div>}
+import { addWorkout } from "@/lib/actions/fitness";
+import { createClient } from "@/lib/supabase/server";
+export default async function FitnessPage(){ const supabase=await createClient();const{data:workouts}=await supabase.from("workouts").select("id,title,type,duration_minutes,performed_at,source").order("performed_at",{ascending:false}).limit(12);const rows=workouts??[]; return <main className="py-mobile-shell md:py-shell-narrow"><header className="py-animate-in mb-7"><div className="py-eyebrow mb-1.5">Training context</div><h1 className="py-title">Fitness</h1><p className="py-subtitle">Your actual workouts build the training picture. No sample recovery or streak numbers.</p></header>{!rows.length?<section className="py-glass-hero py-animate-in py-stagger-1 p-5"><div className="py-eyebrow text-[#C8AEFF]">Start the history</div><h2 className="m-0 mt-3 text-[25px] font-bold tracking-[-.04em] text-white">Log the work you actually do.</h2><p className="m-0 mt-2 text-[13px] leading-relaxed text-[#C2BED0]">One workout is enough to start. Over time Project You+ can use frequency, duration and health context to help protect consistency.</p></section>:<section className="py-glass-hero py-animate-in py-stagger-1 p-5"><div className="py-eyebrow text-[#C8AEFF]">Training history</div><div className="mt-2 text-[38px] font-bold tracking-[-.05em] text-white">{rows.length}</div><div className="mt-1 text-[12px] text-[#C2BED0]">recent workout{rows.length===1?"":"s"} tracked</div></section>}<form action={addWorkout} className="py-glass-soft py-animate-in py-stagger-2 mt-4 p-4"><div className="py-eyebrow text-accent-text">Quick log</div><div className="mt-3 space-y-2.5"><input name="title" required placeholder="Workout title" className="py-input"/><div className="grid grid-cols-2 gap-2.5"><select name="type" className="py-input text-[12px]" defaultValue="strength"><option value="strength">Strength</option><option value="cardio">Cardio</option><option value="mobility">Mobility</option><option value="sport">Sport</option></select><input name="duration" type="number" min="1" required placeholder="Minutes" className="py-input"/></div></div><button className="py-liquid-button mt-3 w-full">Log workout</button></form>{rows.length>0&&<section className="py-animate-in py-stagger-3 mt-7"><div className="mb-3"><div className="py-eyebrow">Recent</div><h2 className="m-0 mt-1 text-[22px] font-semibold tracking-[-.03em] text-text-1">Your workouts</h2></div><div className="py-glass-soft divide-y divide-white/[.06] px-4">{rows.map(w=><div key={w.id} className="flex items-center gap-3 py-4"><span className="py-empty-icon">↗</span><span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-text-1">{w.title}</span><span className="mt-0.5 block text-[11px] capitalize text-text-3">{w.type??"workout"} · {new Date(w.performed_at).toLocaleDateString()}</span></span><span className="text-[12px] font-semibold text-text-2">{w.duration_minutes??0} min</span></div>)}</div></section>}</main> }

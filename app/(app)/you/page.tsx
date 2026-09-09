@@ -1,93 +1,35 @@
 import Link from "next/link";
 import { NavIcon } from "@/components/layout/nav-icon";
-import { buildProjectYouContext } from "@/lib/ai/context";
-import { mockHabits, mockHealth, mockMoney } from "@/lib/mock-data";
-
-const core = [
-  { href: "/health", icon: "health", title: "Health", value: "74", sub: "Nutrition, sleep, recovery" },
-  { href: "/fitness", icon: "fitness", title: "Fitness", value: "84", sub: "Training and progression" },
-  { href: "/money", icon: "money", title: "Money", value: "79", sub: "Cash flow and investments" },
-  { href: "/habits", icon: "habits", title: "Habits", value: "90", sub: "Consistency and streaks" },
-];
-
-const more = [
-  { href: "/progress", icon: "progress", title: "Progress", sub: "Your cross-life trend" },
-  { href: "/review", icon: "review", title: "Weekly Review", sub: "Reflect, learn, reset" },
-  { href: "/integrations", icon: "integrations", title: "Integrations", sub: "Health, calendar, accounts" },
-  { href: "/settings", icon: "settings", title: "Settings", sub: "Preferences and privacy" },
-];
+import { getProfile } from "@/lib/data/profile";
+import { getGoals } from "@/lib/data/goals";
+import { getTasks } from "@/lib/data/tasks";
+import { getHabits } from "@/lib/data/habits";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function YouPage() {
-  const context = await buildProjectYouContext();
-  const name = (context.profile.fullName ?? "You").split(" ")[0];
-  const dailyScore = context.score.score;
-  const habitAverage = Math.round(mockHabits.reduce((sum, habit) => sum + habit.consistencyPct, 0) / mockHabits.length);
-
+  const [profile, goals, tasks, habits, counts] = await Promise.all([ getProfile(), getGoals(), getTasks(), getHabits(), getDomainCounts() ]);
+  const name = (profile.fullName ?? "You").split(" ")[0];
+  const activeGoals = goals.filter((goal) => goal.status === "active");
+  const completedTasks = tasks.filter((task) => task.completedAt).length;
+  const systemChecks = [activeGoals.length > 0, tasks.length > 0, habits.length > 0, counts.health > 0, counts.money > 0, counts.calendar > 0];
+  const setupPct = Math.round((systemChecks.filter(Boolean).length / systemChecks.length) * 100);
+  const domains = [
+    { href: "/health", icon: "health", title: "Health", value: counts.health ? `${counts.health} signals` : "Set up", sub: counts.health ? "Real health context added" : "Add sleep, steps, water or meals" },
+    { href: "/fitness", icon: "fitness", title: "Fitness", value: counts.workouts ? `${counts.workouts} workouts` : "Set up", sub: counts.workouts ? "Training history is building" : "Log your first workout" },
+    { href: "/money", icon: "money", title: "Money", value: counts.money ? `${counts.money} accounts` : "Set up", sub: counts.money ? "Financial picture started" : "Add an account or balance" },
+    { href: "/habits", icon: "habits", title: "Habits", value: habits.length ? `${habits.length} active` : "Set up", sub: habits.length ? "Consistency is being tracked" : "Create a goal-supporting habit" },
+  ];
   return (
     <main className="py-mobile-shell md:py-shell-narrow">
-      <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <div className="py-eyebrow mb-1.5">Your system</div>
-          <h1 className="py-title">{name}</h1>
-          <p className="py-subtitle">Everything that makes you better, connected.</p>
-        </div>
-        <Link href="/profile" className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-[var(--surface-2)] text-[13px] font-bold text-text-1">
-          {name.slice(0, 2).toUpperCase()}
-        </Link>
-      </header>
-
-      <section className="py-accent-card p-[18px] sm:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="py-eyebrow text-accent-text">Project You+ score</div>
-            <div className="mt-1 text-[42px] font-bold tracking-[-0.05em] text-text-1">{dailyScore.score}</div>
-            <div className="text-[13px] font-semibold text-positive">↑ {dailyScore.weeklyDeltaPct}% this week</div>
-          </div>
-          <div className="text-right">
-            <div className="text-[12px] text-text-3">Momentum</div>
-            <div className="mt-1 text-[17px] font-semibold text-text-1">Strong</div>
-            <Link href="/progress" className="mt-2 inline-block text-[12px] font-semibold text-accent-text">View progress →</Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-5 grid grid-cols-2 gap-3">
-        {core.map((item) => (
-          <Link key={item.href} href={item.href} className="py-card min-h-[132px] p-4 transition active:scale-[.99]">
-            <div className="flex items-start justify-between">
-              <span className="py-icon-tile text-accent-text"><NavIcon name={item.icon} className="h-5 w-5" /></span>
-              <span className="text-[21px] font-bold tracking-tight text-text-1">{item.value}</span>
-            </div>
-            <div className="mt-3 text-[15px] font-semibold text-text-1">{item.title}</div>
-            <div className="mt-1 text-[11.5px] leading-relaxed text-text-2">{item.sub}</div>
-          </Link>
-        ))}
-      </section>
-
-      <section className="mt-5 rounded-[18px] border border-border bg-[var(--surface-2)] p-4">
-        <div className="flex items-start gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[12px] font-bold text-white">AI</span>
-          <div>
-            <div className="text-[13px] font-semibold text-text-1">What matters most right now</div>
-            <p className="m-0 mt-1 text-[12.5px] leading-relaxed text-text-2">
-              Recovery is {mockHealth.recoveryPct}%, habit consistency is {habitAverage}%, and your weekly budget is {mockMoney.weeklyBudgetPctUsed}% used. Sleep is still the clearest lever for improving the whole system.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 py-card px-4">
-        {more.map((item) => (
-          <Link key={item.href} href={item.href} className="py-list-row">
-            <span className="py-icon-tile"><NavIcon name={item.icon} className="h-[18px] w-[18px]" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-text-1">{item.title}</span>
-              <span className="mt-0.5 block text-[12px] text-text-2">{item.sub}</span>
-            </span>
-            <span className="text-[20px] text-text-3">›</span>
-          </Link>
-        ))}
-      </section>
+      <header className="py-animate-in mb-7 flex items-center justify-between gap-4"><div><div className="py-eyebrow mb-1.5">Your operating system</div><h1 className="py-title">{name}</h1><p className="py-subtitle">One place for the context that makes your plan personal.</p></div><Link href="/profile" className="py-glass flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-text-1">{name.slice(0,2).toUpperCase()}</Link></header>
+      <section className="py-glass-hero py-animate-in py-stagger-1 p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><div className="py-eyebrow text-[#C8AEFF]">System readiness</div><div className="mt-2 text-[40px] font-bold tracking-[-.055em] text-white">{setupPct}%</div><p className="m-0 mt-1 max-w-[310px] text-[12.5px] leading-relaxed text-[#C2BED0]">{setupPct === 100 ? "Your core context is connected. Keep it current and Project You+ gets sharper over time." : "Finish your core setup so Today and Coach can make better decisions with real data."}</p></div><span className="py-glass-pill text-[#C8AEFF]">{systemChecks.filter(Boolean).length}/6 ready</span></div><div className="mt-5 py-progress-track"><div className="py-progress-fill" style={{width:`${setupPct}%`}} /></div></section>
+      <section className="py-animate-in py-stagger-2 mt-6 grid grid-cols-2 gap-3">{domains.map((item)=><Link key={item.href} href={item.href} className="py-glass-soft py-pressable min-h-[140px] p-4"><div className="flex items-start justify-between gap-3"><span className="py-icon-tile text-accent-text"><NavIcon name={item.icon} className="h-5 w-5" /></span><span className="text-right text-[11px] font-semibold text-accent-text">{item.value}</span></div><div className="mt-4 text-[15px] font-semibold text-text-1">{item.title}</div><div className="mt-1 text-[11.5px] leading-relaxed text-text-3">{item.sub}</div></Link>)}</section>
+      <section className="py-animate-in py-stagger-3 mt-7"><div className="mb-3"><div className="py-eyebrow">Direction</div><h2 className="m-0 mt-1 text-[22px] font-semibold tracking-[-.03em] text-text-1">Your current system</h2></div><div className="py-glass-soft divide-y divide-white/[.06] px-4"><SystemRow href="/goals" label="Active goals" value={String(activeGoals.length)} hint={activeGoals.length ? activeGoals.slice(0,2).map(g=>g.title).join(" · ") : "Create a destination"} /><SystemRow href="/tasks" label="Actions" value={`${completedTasks}/${tasks.length}`} hint={tasks.length ? "completed / tracked" : "Add concrete next moves"} /><SystemRow href="/habits" label="Supporting habits" value={String(habits.filter(h=>h.goalId).length)} hint={habits.length ? `${habits.filter(h=>!h.goalId).length} still unlinked` : "Build repeatable behavior"} /><SystemRow href="/calendar" label="Calendar context" value={String(counts.calendar)} hint={counts.calendar ? "commitments available to planning" : "Add your real schedule"} /></div></section>
+      {profile.blueprint?.priorities?.length ? <section className="py-glass-soft py-animate-in py-stagger-4 mt-7 p-[18px]"><div className="py-eyebrow text-accent-text">Your priorities</div><div className="mt-3 flex flex-wrap gap-2">{profile.blueprint.priorities.map((priority)=><span key={priority} className="py-glass-pill text-text-1">{priority}</span>)}</div><p className="m-0 mt-3 text-[11.5px] leading-relaxed text-text-3">Project You+ should favor actions that support these areas first. You can refine them from your Blueprint.</p></section> : null}
+      <section className="py-animate-in py-stagger-5 mt-7 py-glass-soft px-4"><LinkRow href="/progress" icon="progress" title="Progress" sub="See what your real activity is changing" /><LinkRow href="/review" icon="review" title="Weekly Review" sub="Reflect on real goals, actions and habits" /><LinkRow href="/integrations" icon="integrations" title="Integrations" sub="See what is actually connected" /><LinkRow href="/settings" icon="settings" title="Settings" sub="Preferences, privacy and account" /></section>
     </main>
   );
 }
+async function getDomainCounts(){ const supabase=await createClient(); const[{count:health},{count:money},{count:workouts},{count:calendar}]=await Promise.all([supabase.from("health_metrics").select("id",{count:"exact",head:true}),supabase.from("finance_accounts").select("id",{count:"exact",head:true}),supabase.from("workouts").select("id",{count:"exact",head:true}),supabase.from("calendar_events").select("id",{count:"exact",head:true})]); return {health:health??0,money:money??0,workouts:workouts??0,calendar:calendar??0}; }
+function SystemRow({href,label,value,hint}:{href:string;label:string;value:string;hint:string}){return <Link href={href} className="py-pressable flex items-center gap-3 py-4"><span className="min-w-0 flex-1"><span className="block text-[13.5px] font-semibold text-text-1">{label}</span><span className="mt-0.5 block truncate text-[11px] text-text-3">{hint}</span></span><span className="text-[14px] font-bold text-accent-text">{value}</span><span className="text-[20px] text-text-3">›</span></Link>}
+function LinkRow({href,icon,title,sub}:{href:string;icon:string;title:string;sub:string}){return <Link href={href} className="py-list-row py-pressable"><span className="py-icon-tile"><NavIcon name={icon} className="h-[18px] w-[18px]" /></span><span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-text-1">{title}</span><span className="mt-0.5 block text-[11.5px] text-text-3">{sub}</span></span><span className="text-[20px] text-text-3">›</span></Link>}

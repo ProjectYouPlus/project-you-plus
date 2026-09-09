@@ -1,107 +1,31 @@
 import Link from "next/link";
-import { NavIcon } from "@/components/layout/nav-icon";
-import { buildProjectYouContext } from "@/lib/ai/context";
-
-const sections = [
-  {
-    href: "/goals",
-    icon: "goals",
-    title: "Goals",
-    description: "Long-term direction and next milestones",
-    meta: "4 active",
-  },
-  {
-    href: "/tasks",
-    icon: "tasks",
-    title: "Tasks",
-    description: "Priorities, smart defaults, and next actions",
-    meta: "6 today",
-  },
-  {
-    href: "/calendar",
-    icon: "calendar",
-    title: "Calendar",
-    description: "Time blocks, commitments, and open capacity",
-    meta: "1h 35m open",
-  },
-];
+import { getGoals } from "@/lib/data/goals";
+import { getTasks } from "@/lib/data/tasks";
+import { getHabits } from "@/lib/data/habits";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function PlanPage() {
-  const context = await buildProjectYouContext();
-  const openTasks = context.tasks.filter((task) => !task.completedAt).length;
-  const leadGoal = context.goals?.find((goal) => goal.status === "active");
-
+  const [goals, tasks, habits, calendarCount] = await Promise.all([
+    getGoals(), getTasks(), getHabits(), getCalendarCount(),
+  ]);
+  const activeGoals = goals.filter((goal) => goal.status === "active");
+  const openTasks = tasks.filter((task) => !task.completedAt);
+  const goalIds = new Set(activeGoals.map((goal) => goal.id));
+  const unlinkedTasks = openTasks.filter((task) => !task.goalId || !goalIds.has(task.goalId));
+  const leadGoal = [...activeGoals].sort((a, b) => a.progress - b.progress)[0];
   return (
     <main className="py-mobile-shell md:py-shell-narrow">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <div className="py-eyebrow mb-1.5">Your week</div>
-          <h1 className="py-title">Plan</h1>
-          <p className="py-subtitle">Turn goals into time-protected action.</p>
-        </div>
-        <Link href="/tasks/new" className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-[22px] text-text-1">+</Link>
-      </header>
-
-      <section className="py-accent-card p-[18px] sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="py-eyebrow text-accent-text">Weekly capacity</div>
-            <div className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-text-1">7h 10m planned</div>
-            <div className="mt-1 text-[13px] text-text-2">1h 35m open time remaining</div>
-          </div>
-          <span className="rounded-full bg-positive-soft px-3 py-1.5 text-[11px] font-semibold text-positive">Balanced</span>
-        </div>
-        <div className="mt-5 py-progress-track">
-          <div className="py-progress-fill" style={{ width: "82%" }} />
-        </div>
+      <header className="py-animate-in mb-7 flex items-start justify-between gap-4"><div><div className="py-eyebrow mb-1.5">Direction → execution</div><h1 className="py-title">Plan</h1><p className="py-subtitle max-w-[390px]">Every task and habit should earn its place by supporting something that matters.</p></div><Link href="/tasks/new" className="py-glass flex h-11 w-11 items-center justify-center rounded-full text-[22px] text-text-1">+</Link></header>
+      <section className="py-glass-hero py-animate-in py-stagger-1 p-5 sm:p-6">
+        <div className="py-eyebrow text-[#C8AEFF]">Planning principle</div>
+        {leadGoal ? <><h2 className="m-0 mt-3 text-[25px] font-bold tracking-[-0.04em] text-white">Protect momentum on {leadGoal.title}.</h2><p className="m-0 mt-2 text-[13px] leading-relaxed text-[#C2BED0]">{openTasks.filter((task) => task.goalId === leadGoal.id).length ? `You already have ${openTasks.filter((task) => task.goalId === leadGoal.id).length} open action${openTasks.filter((task) => task.goalId === leadGoal.id).length === 1 ? "" : "s"} tied to this goal. Finish the highest-impact one before adding more.` : "This goal has no open next action. Give it one concrete move so Today can prioritize it."}</p><div className="mt-5 flex gap-2.5"><Link href={`/goals/${leadGoal.id}`} className="py-liquid-button flex-1">Open goal</Link><Link href="/tasks/new" className="py-glass flex min-h-[46px] items-center justify-center rounded-[16px] px-4 text-[13px] font-semibold text-white">Add action</Link></div></> : <><h2 className="m-0 mt-3 text-[25px] font-bold tracking-[-0.04em] text-white">Start with one destination.</h2><p className="m-0 mt-2 text-[13px] leading-relaxed text-[#C2BED0]">Create a goal first. Then Project You+ can organize your tasks, habits, and calendar around it.</p><Link href="/goals/new" className="py-liquid-button mt-5 w-full">Create a goal</Link></>}
       </section>
-
-      <section className="mt-4 rounded-[18px] border border-border bg-[var(--surface-2)] p-4">
-        <div className="flex gap-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[13px] font-bold text-white">AI</span>
-          <div>
-            <div className="text-[13px] font-semibold text-text-1">Best planning move</div>
-            <p className="m-0 mt-1 text-[13px] leading-relaxed text-text-2">
-              Protect your next open 90-minute block for {leadGoal?.title ?? "your highest-priority goal"}. You have {openTasks} open tasks, but only one needs deep focus.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="m-0 text-[20px] font-semibold tracking-[-0.025em] text-text-1">Plan your life</h2>
-          <span className="text-[12px] text-text-3">AI connected</span>
-        </div>
-        <div className="space-y-3">
-          {sections.map((section) => (
-            <Link key={section.href} href={section.href} className="py-card flex items-center gap-4 p-4 transition active:scale-[.99]">
-              <span className="py-icon-tile text-accent-text">
-                <NavIcon name={section.icon} className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold text-text-1">{section.title}</span>
-                <span className="mt-0.5 block text-[12.5px] leading-relaxed text-text-2">{section.description}</span>
-              </span>
-              <span className="text-right">
-                <span className="block text-[11px] font-semibold text-accent-text">{section.meta}</span>
-                <span className="mt-1 block text-[20px] leading-none text-text-3">›</span>
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-6 py-card p-[18px]">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="py-eyebrow">Next protected block</div>
-            <div className="mt-1 text-[18px] font-semibold text-text-1">4:30 PM · Strength workout</div>
-            <div className="mt-1 text-[12.5px] text-text-2">45 minutes · AI scheduled</div>
-          </div>
-          <Link href="/calendar" className="text-[13px] font-semibold text-accent-text">View</Link>
-        </div>
-      </section>
+      <section className="py-animate-in py-stagger-2 mt-7"><div className="mb-3 flex items-end justify-between gap-3"><div><div className="py-eyebrow">Goals</div><h2 className="m-0 mt-1 text-[22px] font-semibold tracking-[-0.03em] text-text-1">What you are building</h2></div><Link href="/goals" className="text-[12px] font-semibold text-accent-text">Manage</Link></div>{activeGoals.length ? <div className="grid gap-3">{activeGoals.map((goal) => {const goalTasks = openTasks.filter((task) => task.goalId === goal.id);const goalHabits = habits.filter((habit) => habit.goalId === goal.id);return <Link key={goal.id} href={`/goals/${goal.id}`} className="py-glass-soft py-pressable block p-[18px]"><div className="flex items-start justify-between gap-4"><div className="min-w-0"><div className="truncate text-[16px] font-semibold text-text-1">{goal.title}</div><div className="mt-1 text-[11.5px] text-text-3">{goalTasks.length} open action{goalTasks.length === 1 ? "" : "s"} · {goalHabits.length} habit{goalHabits.length === 1 ? "" : "s"}</div></div><span className="py-glass-pill shrink-0 text-accent-text">{goal.progress}%</span></div><div className="mt-4 py-progress-track"><div className="py-progress-fill" style={{ width: `${goal.progress}%` }} /></div>{goalTasks[0] ? <div className="mt-3 text-[11.5px] text-text-2"><span className="text-text-3">Next:</span> {goalTasks[0].title}</div> : <div className="mt-3 text-[11.5px] font-medium text-warn">Needs a next action</div>}</Link>;})}</div> : <GuideCard href="/goals/new" title="Create your first goal" sub="Goals are the parent layer for tasks, habits, and milestones." action="Add goal" />}</section>
+      <section className="py-animate-in py-stagger-3 mt-7"><div className="mb-3"><div className="py-eyebrow">Planning health</div><h2 className="m-0 mt-1 text-[22px] font-semibold tracking-[-0.03em] text-text-1">Keep the system organized</h2></div><div className="grid gap-2.5 sm:grid-cols-3"><Mini href="/tasks" label="Open tasks" value={String(openTasks.length)} sub={unlinkedTasks.length ? `${unlinkedTasks.length} need a goal link` : openTasks.length ? "All goal-linked" : "Add your first action"} warn={unlinkedTasks.length > 0} /><Mini href="/habits" label="Habits" value={String(habits.length)} sub={habits.filter((habit) => habit.goalId).length ? `${habits.filter((habit) => habit.goalId).length} linked to goals` : habits.length ? "Link habits to goals" : "Build consistency"} warn={habits.length > 0 && !habits.some((habit) => habit.goalId)} /><Mini href="/calendar" label="Calendar" value={String(calendarCount)} sub={calendarCount ? "Real commitments added" : "Add time context"} /></div></section>
+      {unlinkedTasks.length > 0 && <section className="py-glass-soft py-animate-in py-stagger-4 mt-7 p-4"><div className="flex gap-3"><span className="py-empty-icon">↗</span><div className="min-w-0 flex-1"><div className="text-[13px] font-semibold text-text-1">{unlinkedTasks.length} task{unlinkedTasks.length === 1 ? " is" : "s are"} floating without a goal</div><p className="m-0 mt-1 text-[12px] leading-relaxed text-text-2">Linking actions to goals lets Today rank impact instead of just urgency.</p></div><Link href="/tasks" className="self-center text-[12px] font-semibold text-accent-text">Review</Link></div></section>}
     </main>
   );
 }
+async function getCalendarCount() { const supabase = await createClient(); const { count } = await supabase.from("calendar_events").select("id", { count: "exact", head: true }); return count ?? 0; }
+function GuideCard({ href, title, sub, action }: { href: string; title: string; sub: string; action: string }) { return <Link href={href} className="py-glass-soft py-pressable flex items-center gap-3 p-4"><span className="py-empty-icon">+</span><span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-text-1">{title}</span><span className="mt-0.5 block text-[11.5px] leading-relaxed text-text-3">{sub}</span></span><span className="text-[11.5px] font-semibold text-accent-text">{action}</span></Link>; }
+function Mini({ href, label, value, sub, warn = false }: { href: string; label: string; value: string; sub: string; warn?: boolean }) { return <Link href={href} className="py-glass-soft py-pressable p-4"><div className="py-eyebrow">{label}</div><div className="mt-2 text-[28px] font-bold tracking-[-.04em] text-text-1">{value}</div><div className={`mt-1 text-[11px] ${warn ? "text-warn" : "text-text-3"}`}>{sub}</div></Link>; }

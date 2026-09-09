@@ -2,56 +2,5 @@ import { isDemoMode } from "@/lib/demo-mode";
 import { mockHabits } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Habit } from "@/lib/types";
-
-export async function getHabits(): Promise<Habit[]> {
-  if (isDemoMode) return mockHabits;
-
-  const supabase = await createClient();
-  const { data: habits, error } = await supabase.from("habits").select("*").order("created_at");
-  if (error || !habits) return [];
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const { data: logs } = await supabase
-    .from("habit_logs")
-    .select("habit_id, logged_at")
-    .gte("logged_at", thirtyDaysAgo.toISOString().slice(0, 10));
-
-  return habits.map((h) => {
-    const habitLogs = (logs ?? []).filter((l) => l.habit_id === h.id);
-    const consistencyPct = Math.round((habitLogs.length / 30) * 100);
-
-    // Streak: consecutive days up to and including today with a log.
-    let streakDays = 0;
-    const loggedDates = new Set(habitLogs.map((l) => l.logged_at));
-    const cursor = new Date();
-    while (loggedDates.has(cursor.toISOString().slice(0, 10))) {
-      streakDays += 1;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-
-    return {
-      id: h.id,
-      title: h.title,
-      targetFrequency: h.target_frequency ?? "daily",
-      consistencyPct: Math.min(consistencyPct, 100),
-      streakDays,
-    };
-  });
-}
-
-export async function isHabitLoggedToday(habitId: string): Promise<boolean> {
-  if (isDemoMode) return false;
-
-  const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const { data } = await supabase
-    .from("habit_logs")
-    .select("id")
-    .eq("habit_id", habitId)
-    .eq("logged_at", today)
-    .maybeSingle();
-
-  return !!data;
-}
+export async function getHabits(): Promise<Habit[]> { if (isDemoMode) return mockHabits.map((h)=>({...h,goalId:null})); const supabase = await createClient(); const { data: habits, error } = await supabase.from("habits").select("*").order("created_at"); if (error || !habits) return []; const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30); const { data: logs } = await supabase.from("habit_logs").select("habit_id, logged_at").gte("logged_at", thirtyDaysAgo.toISOString().slice(0, 10)); return habits.map((h) => { const habitLogs = (logs ?? []).filter((l) => l.habit_id === h.id); const consistencyPct = Math.round((habitLogs.length / 30) * 100); let streakDays = 0; const loggedDates = new Set(habitLogs.map((l) => l.logged_at)); const cursor = new Date(); while (loggedDates.has(cursor.toISOString().slice(0, 10))) { streakDays += 1; cursor.setDate(cursor.getDate() - 1); } return { id: h.id, goalId: h.goal_id ?? null, title: h.title, targetFrequency: h.target_frequency ?? "daily", consistencyPct: Math.min(consistencyPct, 100), streakDays }; }); }
+export async function isHabitLoggedToday(habitId: string): Promise<boolean> { if (isDemoMode) return false; const supabase = await createClient(); const today = new Date().toISOString().slice(0, 10); const { data } = await supabase.from("habit_logs").select("id").eq("habit_id", habitId).eq("logged_at", today).maybeSingle(); return !!data; }

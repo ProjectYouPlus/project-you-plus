@@ -1,101 +1,20 @@
 import Link from "next/link";
-import { mockHealth } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/server";
+import { HealthQuickEntry } from "@/components/health/health-quick-entry";
 
-const MEALS = [
-  { title: "Chicken burrito bowl", meta: "620 kcal · 54g protein", time: "12:42 PM" },
-  { title: "Protein oats + eggs", meta: "510 kcal · 43g protein", time: "8:10 AM" },
-];
-
-export default function HealthPage({ searchParams }: { searchParams?: { mealSaved?: string } }) {
-  const sleepHours = Math.floor(mockHealth.sleepMinutes / 60);
-  const sleepMins = mockHealth.sleepMinutes % 60;
-
-  return (
-    <main className="py-mobile-shell md:py-shell-narrow">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <div className="py-eyebrow mb-1.5">Wednesday, Sep 9</div>
-          <h1 className="py-title">Health</h1>
-        </div>
-        <Link href="/health/scan-meal" className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-[22px] text-text-1">+</Link>
-      </header>
-
-      {searchParams?.mealSaved === "1" && <div className="mb-4 rounded-[16px] border border-positive/30 bg-positive-soft px-4 py-3 text-[12.5px] font-semibold text-positive">Meal saved. Today’s nutrition has been updated.</div>}
-
-      <section className="py-card p-[18px] sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="m-0 text-[21px] font-semibold text-text-1">Nutrition today</h2>
-            <div className="mt-1 text-[12.5px] text-text-2">1,640 of 2,200 kcal</div>
-          </div>
-          <div className="text-[24px] font-bold text-accent-text">74%</div>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {[
-            ["Protein", "128g", "160g goal"],
-            ["Carbs", "146g", "220g goal"],
-            ["Fat", "48g", "70g goal"],
-          ].map(([label, value, goal]) => (
-            <div key={label} className="rounded-[14px] bg-[var(--surface-2)] p-3">
-              <div className="text-[10.5px] font-semibold text-text-3">{label}</div>
-              <div className="mt-1 text-[18px] font-bold text-text-1">{value}</div>
-              <div className="mt-1 text-[10px] text-text-3">{goal}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <Link href="/health/scan-meal" className="mt-4 flex items-center gap-3 rounded-[18px] border border-accent/40 bg-accent-soft p-4">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] bg-accent text-[24px] text-white">◎</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold text-text-1">Scan your meal</span>
-          <span className="mt-0.5 block text-[12px] text-text-2">Take a photo and AI estimates macros</span>
-        </span>
-        <span className="text-[22px] text-text-3">›</span>
-      </Link>
-
-      <section className="mt-4 py-card px-4 pt-4">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="m-0 text-[19px] font-semibold text-text-1">Recent meals</h2>
-          <span className="text-[12px] font-semibold text-accent-text">See all</span>
-        </div>
-        {MEALS.map((meal) => (
-          <div key={meal.title} className="py-list-row">
-            <span className="h-11 w-11 rounded-[14px] bg-[var(--surface-2)]" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-text-1">{meal.title}</span>
-              <span className="mt-0.5 block text-[11.5px] text-text-2">{meal.meta}</span>
-            </span>
-            <span className="text-[10.5px] text-text-3">{meal.time}</span>
-          </div>
-        ))}
-      </section>
-
-      <section className="mt-4 grid grid-cols-3 gap-2">
-        <Metric label="Water" value="64 oz" sub="80 oz goal" />
-        <Metric label="Steps" value={mockHealth.steps.toLocaleString()} sub="10k goal" />
-        <Metric label="Sleep" value={`${sleepHours}h ${sleepMins}m`} sub="Good" positive />
-      </section>
-
-      <section className="mt-4 rounded-[18px] border border-border bg-[var(--surface-2)] p-4">
-        <div className="flex gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[12px] font-bold text-white">AI</span>
-          <div>
-            <div className="text-[12.5px] font-semibold text-text-1">Project You+ insight</div>
-            <p className="m-0 mt-1 text-[12px] leading-relaxed text-text-2">Protein is pacing well. One high-protein dinner puts you near today&apos;s target. Recovery is {mockHealth.recoveryPct}%, so the planned workout still fits.</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+const LABELS: Record<string,{label:string;unit:string}>={steps:{label:"Steps",unit:""},sleep_minutes:{label:"Sleep",unit:"min"},water_cups:{label:"Water",unit:"cups"},weight_kg:{label:"Weight",unit:"kg"},resting_hr:{label:"Resting HR",unit:"bpm"},recovery_pct:{label:"Recovery",unit:"%"}};
+export default async function HealthPage(){
+  const supabase=await createClient();
+  const {data:metrics}=await supabase.from("health_metrics").select("metric_type,value,recorded_at,source").order("recorded_at",{ascending:false}).limit(80);
+  const latest=new Map<string,{value:number;recorded_at:string;source:string}>();
+  for(const row of metrics??[]){if(!latest.has(row.metric_type))latest.set(row.metric_type,{value:Number(row.value),recorded_at:row.recorded_at,source:row.source})}
+  const hasData=latest.size>0;
+  return <main className="py-mobile-shell md:py-shell-narrow"><header className="py-animate-in mb-7 flex items-start justify-between gap-4"><div><div className="py-eyebrow mb-1.5">Body context</div><h1 className="py-title">Health</h1><p className="py-subtitle">Only your real signals appear here. No sample calories, steps, sleep or recovery.</p></div><Link href="/health/scan-meal" className="py-glass flex h-11 w-11 items-center justify-center rounded-full text-[21px] text-text-1">+</Link></header>
+  {!hasData&&<section className="py-glass-hero py-animate-in py-stagger-1 p-5"><div className="py-eyebrow text-[#C8AEFF]">Build your baseline</div><h2 className="m-0 mt-3 text-[25px] font-bold tracking-[-.04em] text-white">Health gets useful when it knows your normal.</h2><p className="m-0 mt-2 text-[13px] leading-relaxed text-[#C2BED0]">Start with one or two signals you can maintain. Steps, sleep and water are enough to begin.</p><div className="mt-5 grid grid-cols-3 gap-2">{[["1","Add a signal"],["2","Log meals"],["3","Build history"]].map(([n,t])=><div key={n} className="rounded-[16px] border border-white/10 bg-white/[.035] p-3"><div className="text-[10px] font-bold text-[#C8AEFF]">0{n}</div><div className="mt-1 text-[10.5px] font-medium text-white">{t}</div></div>)}</div></section>}
+  {hasData&&<section className="py-animate-in py-stagger-1 grid grid-cols-2 gap-3 sm:grid-cols-3">{[...latest.entries()].slice(0,6).map(([key,item])=>{const meta=LABELS[key]??{label:key.replaceAll("_"," "),unit:""};return <div key={key} className="py-glass-soft p-4"><div className="py-eyebrow">{meta.label}</div><div className="mt-2 text-[25px] font-bold tracking-[-.04em] text-text-1">{formatValue(key,item.value)}{meta.unit&&<span className="ml-1 text-[11px] font-medium text-text-3">{meta.unit}</span>}</div><div className="mt-1 text-[10px] text-text-3">{item.source} · {new Date(item.recorded_at).toLocaleDateString()}</div></div>})}</section>}
+  <div className="py-animate-in py-stagger-2 mt-4"><HealthQuickEntry /></div>
+  <Link href="/health/scan-meal" className="py-glass-soft py-pressable py-animate-in py-stagger-3 mt-4 flex items-center gap-3 p-4"><span className="py-empty-icon">◎</span><span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-text-1">Scan a meal</span><span className="mt-0.5 block text-[11.5px] leading-relaxed text-text-3">Use the meal-photo flow to estimate macros, review them, then confirm.</span></span><span className="text-[20px] text-text-3">›</span></Link>
+  <section className="py-glass-soft py-animate-in py-stagger-4 mt-7 p-4"><div className="py-eyebrow text-accent-text">What to add next</div><div className="mt-3 space-y-3 text-[12px] text-text-2"><Tip done={latest.has("steps")} text="Steps — useful for daily movement and recovery context"/><Tip done={latest.has("sleep_minutes")} text="Sleep — helps Project You+ avoid overloading low-energy days"/><Tip done={latest.has("water_cups")} text="Water — simple recovery consistency signal"/></div><Link href="/integrations" className="mt-4 inline-block text-[12px] font-semibold text-accent-text">View future health connections →</Link></section></main>
 }
-
-function Metric({ label, value, sub, positive = false }: { label: string; value: string; sub: string; positive?: boolean }) {
-  return (
-    <div className="py-card p-3.5">
-      <div className="text-[10.5px] font-semibold text-text-3">{label}</div>
-      <div className="mt-1 text-[17px] font-bold text-text-1">{value}</div>
-      <div className={`mt-1 text-[10px] ${positive ? "text-positive" : "text-text-3"}`}>{sub}</div>
-    </div>
-  );
-}
+function formatValue(key:string,value:number){if(key==="sleep_minutes")return `${Math.floor(value/60)}h ${Math.round(value%60)}`;return Number.isInteger(value)?String(value):value.toFixed(1)}
+function Tip({done,text}:{done:boolean;text:string}){return <div className="flex items-start gap-2.5"><span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] ${done?"border-positive bg-positive-soft text-positive":"border-border text-transparent"}`}>✓</span><span>{text}</span></div>}

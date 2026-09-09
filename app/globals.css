@@ -25,6 +25,9 @@
   --info: #3B82F6;
   --shadow-card: 0 16px 50px rgba(15, 23, 42, 0.08);
   --shadow-focus: 0 0 0 1px rgba(124,58,237,.22), 0 18px 60px rgba(124,58,237,.14);
+  --glass-bg: rgba(255,255,255,.62);
+  --glass-border: rgba(255,255,255,.72);
+  --glass-shine: rgba(255,255,255,.74);
 }
 
 .dark {
@@ -41,7 +44,7 @@
   --accent-2: #A970FF;
   --accent-soft: rgba(139, 92, 246, 0.13);
   --accent-glow: rgba(139, 92, 246, 0.28);
-  --accent-text: #A970FF;
+  --accent-text: #B58CFF;
   --positive: #36D98B;
   --positive-soft: rgba(54, 217, 139, 0.11);
   --warn: #FFB84D;
@@ -50,13 +53,20 @@
   --info: #3B82F6;
   --shadow-card: 0 18px 54px rgba(0,0,0,.20);
   --shadow-focus: 0 0 0 1px rgba(139,92,246,.28), 0 22px 70px rgba(139,92,246,.16);
+  --glass-bg: rgba(24,24,38,.60);
+  --glass-border: rgba(255,255,255,.11);
+  --glass-shine: rgba(255,255,255,.14);
 }
 
 * { box-sizing: border-box; }
 html { background: var(--bg); }
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 18% -6%, rgba(139,92,246,.15), transparent 30%),
+    radial-gradient(circle at 90% 8%, rgba(72,111,255,.07), transparent 23%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
   min-height: 100vh;
@@ -65,69 +75,54 @@ body {
 }
 ::selection { background: rgba(139,92,246,.3); color: #fff; }
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+a { text-decoration: none; }
 
 @layer components {
-  .py-shell {
-    @apply mx-auto min-h-screen w-full max-w-[1180px] px-[18px] pb-32 pt-6 sm:px-7 md:px-8 lg:px-10;
-  }
-  .py-shell-narrow {
-    @apply mx-auto min-h-screen w-full max-w-[920px] px-[18px] pb-32 pt-6 sm:px-7 md:px-8 lg:px-10;
-  }
-  .py-mobile-shell {
-    @apply mx-auto min-h-screen w-full max-w-[520px] px-[18px] pb-32 pt-6;
-  }
-  .py-eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.15em] text-text-3;
-  }
-  .py-title {
-    @apply m-0 text-[30px] font-bold tracking-[-0.04em] text-text-1 sm:text-[34px];
-  }
-  .py-subtitle {
-    @apply mt-1.5 text-[14px] leading-relaxed text-text-2;
-  }
-  .py-card {
-    @apply rounded-[20px] border border-border bg-surface;
-    box-shadow: var(--shadow-card);
-  }
-  .py-card-elevated {
-    @apply rounded-[20px] border border-border bg-[var(--surface-2)];
-    box-shadow: var(--shadow-card);
-  }
+  .py-shell { @apply mx-auto min-h-screen w-full max-w-[1180px] px-[18px] pb-32 pt-6 sm:px-7 md:px-8 lg:px-10; }
+  .py-shell-narrow { @apply mx-auto min-h-screen w-full max-w-[920px] px-[18px] pb-32 pt-6 sm:px-7 md:px-8 lg:px-10; }
+  .py-mobile-shell { @apply mx-auto min-h-screen w-full max-w-[520px] px-[18px] pb-32 pt-6; }
+  .py-eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.15em] text-text-3; }
+  .py-title { @apply m-0 text-[30px] font-bold tracking-[-0.04em] text-text-1 sm:text-[34px]; }
+  .py-subtitle { @apply mt-1.5 text-[14px] leading-relaxed text-text-2; }
+  .py-card { @apply rounded-[20px] border border-border bg-surface; box-shadow: var(--shadow-card); }
+  .py-card-elevated { @apply rounded-[20px] border border-border bg-[var(--surface-2)]; box-shadow: var(--shadow-card); }
   .py-card-pad { @apply p-[18px] sm:p-6; }
   .py-card-hover { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
   .py-card-hover:hover { transform: translateY(-1px); border-color: var(--border-strong); }
-  .py-accent-card {
-    @apply rounded-[20px] border border-border bg-surface;
-    background-image: linear-gradient(135deg, rgba(139,92,246,.18), rgba(139,92,246,.05) 55%, transparent 80%);
-    box-shadow: var(--shadow-focus);
-  }
-  .py-input {
-    @apply w-full min-h-[48px] rounded-[14px] border border-border bg-surface px-4 py-3.5 text-[15px] text-text-1 outline-none transition;
-  }
+  .py-accent-card { @apply rounded-[20px] border border-border bg-surface; background-image: linear-gradient(135deg, rgba(139,92,246,.18), rgba(139,92,246,.05) 55%, transparent 80%); box-shadow: var(--shadow-focus); }
+  .py-input { @apply w-full min-h-[48px] rounded-[14px] border border-border bg-surface px-4 py-3.5 text-[15px] text-text-1 outline-none transition; }
   .py-input::placeholder { color: var(--text-3); }
   .py-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
-  .py-button {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-5 text-[14px] font-semibold transition active:scale-[.985];
-  }
-  .py-button-primary {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-5 text-[14px] font-semibold text-white transition active:scale-[.985];
-    background: linear-gradient(135deg, #7C3AED, #8B5CF6 55%, #A970FF);
-    box-shadow: 0 12px 26px rgba(139,92,246,.25);
-  }
-  .py-button-secondary {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] border border-border bg-surface px-5 text-[14px] font-semibold text-text-1 transition active:scale-[.985];
-  }
+  .py-button { @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-5 text-[14px] font-semibold transition active:scale-[.985]; }
+  .py-button-primary { @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] px-5 text-[14px] font-semibold text-white transition active:scale-[.985]; background: linear-gradient(135deg, #7C3AED, #8B5CF6 55%, #A970FF); box-shadow: 0 12px 26px rgba(139,92,246,.25); }
+  .py-button-secondary { @apply inline-flex min-h-[48px] items-center justify-center rounded-[14px] border border-border bg-surface px-5 text-[14px] font-semibold text-text-1 transition active:scale-[.985]; }
   .py-section-label { @apply text-[11px] font-semibold uppercase tracking-[0.13em] text-text-3; }
   .py-section-title { @apply m-0 mt-1 text-[19px] font-semibold tracking-[-0.02em] text-text-1; }
   .py-divider { @apply border-t border-border; }
   .py-pill { @apply rounded-full border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-text-2; }
   .py-progress-track { @apply h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]; }
-  .py-progress-fill { @apply h-full rounded-full bg-accent; }
+  .py-progress-fill { @apply h-full rounded-full bg-accent; transition: width .55s cubic-bezier(.22,1,.36,1); }
   .py-icon-tile { @apply flex h-10 w-10 items-center justify-center rounded-[13px] bg-[var(--surface-2)] text-text-2; }
   .py-list-row { @apply flex min-h-[64px] items-center gap-3 border-t border-border py-3 first:border-t-0; }
+  .py-glass { position: relative; isolation: isolate; overflow: hidden; border: 1px solid var(--glass-border); background: linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.018) 52%, rgba(139,92,246,.035)), var(--glass-bg); -webkit-backdrop-filter: blur(26px) saturate(155%); backdrop-filter: blur(26px) saturate(155%); box-shadow: inset 0 1px 0 var(--glass-shine), inset 0 -1px 0 rgba(255,255,255,.025), 0 22px 70px rgba(0,0,0,.20); }
+  .py-glass::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; background: linear-gradient(112deg, rgba(255,255,255,.10), transparent 23%, transparent 70%, rgba(139,92,246,.07)); }
+  .py-glass-hero { @apply py-glass rounded-[28px]; background: radial-gradient(circle at 84% 4%, rgba(169,112,255,.25), transparent 34%), linear-gradient(145deg, rgba(65,39,112,.68), rgba(20,18,34,.72) 48%, rgba(12,12,20,.78)); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 28px 85px rgba(43,20,88,.30); }
+  .py-glass-soft { @apply py-glass rounded-[22px]; }
+  .py-glass-pill { @apply inline-flex items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold; border-color: rgba(255,255,255,.10); background: rgba(255,255,255,.055); color: var(--text-2); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  .py-liquid-button { @apply inline-flex min-h-[46px] items-center justify-center rounded-[16px] px-4 text-[13px] font-semibold text-white; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.16); background: linear-gradient(135deg, rgba(169,112,255,.96), rgba(124,58,237,.92)); box-shadow: inset 0 1px 0 rgba(255,255,255,.27), 0 12px 30px rgba(124,58,237,.27); transition: transform .22s cubic-bezier(.22,1,.36,1), filter .22s ease, box-shadow .22s ease; }
+  .py-liquid-button:hover { filter: brightness(1.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.32), 0 16px 34px rgba(124,58,237,.34); }
+  .py-liquid-button:active { transform: scale(.975); }
+  .py-pressable { transition: transform .22s cubic-bezier(.22,1,.36,1), border-color .22s ease, background .22s ease; }
+  .py-pressable:hover { transform: translateY(-1px); }
+  .py-pressable:active { transform: scale(.988); }
+  .py-empty-icon { @apply flex h-11 w-11 items-center justify-center rounded-[15px] text-[16px] font-bold text-accent-text; border: 1px solid rgba(169,112,255,.18); background: rgba(139,92,246,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
 }
-
-@media (max-width: 767px) {
-  body { background: var(--bg); }
-  .py-card { box-shadow: none; }
-}
+.py-animate-in { animation: pyRise .48s cubic-bezier(.22,1,.36,1) both; }
+.py-fade-in { animation: pyFade .38s ease-out both; }
+.py-stagger-1 { animation-delay: 50ms; } .py-stagger-2 { animation-delay: 100ms; } .py-stagger-3 { animation-delay: 150ms; } .py-stagger-4 { animation-delay: 200ms; } .py-stagger-5 { animation-delay: 250ms; }
+.py-pulse-dot { animation: pyPulse 2.2s ease-in-out infinite; }
+@keyframes pyRise { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.992); filter: blur(3px); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); } }
+@keyframes pyFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pyPulse { 0%,100% { opacity:.65; transform:scale(.92); box-shadow:0 0 0 0 rgba(139,92,246,.18);} 50% { opacity:1; transform:scale(1); box-shadow:0 0 0 7px rgba(139,92,246,0);} }
+@media (max-width:767px){ body{background-color:var(--bg);} .py-card{box-shadow:none;} }
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;} }
