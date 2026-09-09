@@ -1,172 +1,165 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { completeOnboarding } from "@/lib/actions/onboarding";
 import type { OnboardingAnswers } from "@/lib/blueprint";
-import { ProjectYouLogo } from "@/components/brand/project-you-logo";
 
-const FOCUS_AREAS = ["Health & Fitness", "Career / Business", "Money / Finances", "Relationships", "Mindset", "Lifestyle", "Habits & Discipline"];
-const OBSTACLES = ["Time / Schedule", "Lack of Discipline", "Finances", "Stress / Anxiety", "Health / Energy", "Bad Habits", "Lack of Clarity"];
-const HEALTH = ["Excellent", "Good", "Average", "Below average", "Poor"];
-const FINANCE = ["Very comfortable", "Comfortable", "Stable", "Struggling", "Prefer not to say"];
-const HABITS = ["Exercise regularly", "Eat healthier", "Better sleep", "Read more", "Be more disciplined", "Reduce screen time", "Mindfulness"];
-const COACHING = ["Direct & challenging", "Supportive & positive", "Data-driven", "Accountability-first", "Highly organized", "Action steps only"];
-const MONEY_GOALS = ["Build emergency savings", "Reduce debt", "Increase investing", "Control spending", "Grow income", "Buy real estate"];
-const CONNECTIONS = ["Calendar", "Apple Health", "Wearables", "Bank accounts", "Investments"];
+const PRIORITIES = [
+  ["Health", "Feel better, eat better, recover"],
+  ["Fitness", "Train consistently and get stronger"],
+  ["Money", "Build savings, invest, control spending"],
+  ["Career", "Perform better and grow professionally"],
+  ["Business", "Build and launch something meaningful"],
+  ["Family", "Protect quality time and relationships"],
+  ["Habits", "Build routines that actually stick"],
+  ["Time", "Use your days more intentionally"],
+] as const;
 
-const EMPTY: OnboardingAnswers = {
-  name: "",
-  topGoals: ["", "", ""],
-  focusAreas: [],
-  idealLifeOneYear: "",
-  holdingBack: "",
-  exerciseFrequency: "",
-  healthEnergyRating: "",
-  financeDescription: "",
-  habitsToBuild: "",
-  habitsToEliminate: "",
-  wakeTime: "06:30",
-  sleepTime: "23:00",
-  primaryActivity: "",
-  coachingStyle: [],
-  availableDailyTime: "60–90 minutes",
-  peakEnergy: "Morning",
-  protectedCommitments: "",
-  nutritionPhotoTracking: true,
-  moneyGoals: [],
-  connectionPrefs: [],
-};
+const PERSONAL_TIME = ["Early morning", "Midday", "Late afternoon", "Evening"];
+const ENERGY = ["Morning", "Afternoon", "Evening"];
+const PROTECTED = [["Family time", "Evenings"], ["Workout time", "4–5× / week"], ["Sleep window", "7+ hours"]] as const;
+const HEALTH_GOALS = ["Lose fat", "Build muscle", "More energy", "Longevity"];
+const TRAINING = [["3×", "Light"], ["4×", "Balanced"], ["5×", "Committed"]] as const;
+const MONEY = ["Save more", "Pay down debt", "Invest consistently", "Control spending"];
+const COACH = [["Direct", "Tell me what to do"], ["Supportive", "Guide and encourage"], ["Strategic", "Explain the why"]] as const;
+const CONNECTIONS = [["Apple Health", "Steps, sleep, workouts"], ["Calendar", "Schedule and free time"], ["Bank & cards", "Cash flow and spending"], ["Investments", "Portfolio and allocation"]] as const;
 
-const TOTAL_STEPS = 5;
-
-export function OnboardingFlow() {
+export function OnboardingFlow({ initialName }: { initialName: string }) {
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<OnboardingAnswers>(EMPTY);
+  const [priorities, setPriorities] = useState<string[]>([]);
+  const [ninetyDayWin, setNinetyDayWin] = useState("");
+  const [workStart, setWorkStart] = useState("09:00");
+  const [workEnd, setWorkEnd] = useState("19:00");
+  const [personalTime, setPersonalTime] = useState<string[]>([]);
+  const [peakEnergy, setPeakEnergy] = useState("Morning");
+  const [protectedItems, setProtectedItems] = useState<string[]>([]);
+  const [healthGoals, setHealthGoals] = useState<string[]>([]);
+  const [training, setTraining] = useState("4×");
+  const [nutritionTracking, setNutritionTracking] = useState(true);
+  const [moneyGoals, setMoneyGoals] = useState<string[]>([]);
+  const [coachStyle, setCoachStyle] = useState("Direct");
+  const [connections, setConnections] = useState<string[]>([]);
   const [isPending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const update = <K extends keyof OnboardingAnswers,>(key: K, value: OnboardingAnswers[K]) => setAnswers((current) => ({ ...current, [key]: value }));
-  const toggleArray = (key: "focusAreas" | "coachingStyle" | "moneyGoals" | "connectionPrefs", value: string) => setAnswers((current) => ({ ...current, [key]: current[key].includes(value) ? current[key].filter((item) => item !== value) : [...current[key], value] }));
-  const togglePipe = (value: string) => {
-    const current = answers.holdingBack ? answers.holdingBack.split(" | ") : [];
-    update("holdingBack", current.includes(value) ? current.filter((item) => item !== value).join(" | ") : [...current, value].join(" | "));
-  };
-  const toggleHabits = (value: string) => {
-    const current = answers.habitsToBuild ? answers.habitsToBuild.split(", ") : [];
-    update("habitsToBuild", current.includes(value) ? current.filter((item) => item !== value).join(", ") : [...current, value].join(", "));
-  };
-  const next = () => setStep((value) => Math.min(TOTAL_STEPS - 1, value + 1));
-  const back = () => setStep((value) => Math.max(0, value - 1));
-  const finish = async () => {
-    setPending(true); setError(null);
-    try { const result = await completeOnboarding(answers); if (result?.error) setError(result.error); }
-    catch { setError("Could not save your plan. Your answers are still here; please try again."); }
-    finally { setPending(false); }
-  };
-  const pct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
+  const selectedPriorityText = useMemo(() => priorities.slice(0, 3).join(" + ") || "Your priorities", [priorities]);
 
-  const canContinue = step !== 0 || (answers.name.trim().length > 0 && answers.focusAreas.length > 0);
+  function toggle(setter: React.Dispatch<React.SetStateAction<string[]>>, value: string, max?: number) {
+    setter((current) => {
+      if (current.includes(value)) return current.filter((item) => item !== value);
+      if (max && current.length >= max) return current;
+      return [...current, value];
+    });
+  }
+
+  function next() {
+    setError(null);
+    if (step === 0 && priorities.length === 0) {
+      setError("Choose at least one area that matters most right now.");
+      return;
+    }
+    setStep((current) => Math.min(4, current + 1));
+  }
+
+  async function finish() {
+    setPending(true);
+    setError(null);
+    const answers: OnboardingAnswers = {
+      name: initialName,
+      topGoals: ninetyDayWin.trim() ? [ninetyDayWin.trim()] : [],
+      focusAreas: priorities,
+      idealLifeOneYear: ninetyDayWin.trim(),
+      holdingBack: "",
+      exerciseFrequency: training === "3×" ? "3x per week" : training === "5×" ? "5+ times per week" : "4x per week",
+      healthEnergyRating: healthGoals.join(" + "),
+      financeDescription: moneyGoals.join(" + "),
+      habitsToBuild: [training ? `Train ${training} per week` : "", nutritionTracking ? "Review nutrition from meal photos" : ""].filter(Boolean).join(", "),
+      habitsToEliminate: "",
+      wakeTime: "06:30",
+      sleepTime: "23:00",
+      primaryActivity: `Typical workday ${workStart}–${workEnd}`,
+      coachingStyle: coachStyle ? [coachStyle] : [],
+      availableDailyTime: personalTime.length ? personalTime.join(", ") : "Flexible personal time",
+      peakEnergy,
+      protectedCommitments: protectedItems.join(", "),
+      nutritionPhotoTracking: nutritionTracking,
+      moneyGoals,
+      connectionPrefs: connections,
+    };
+    try {
+      const result = await completeOnboarding(answers);
+      if (result?.error) setError(result.error);
+    } catch {
+      setError("Could not save your plan. Your answers are still here; please try again.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-bg px-5 pb-8 pt-[max(24px,env(safe-area-inset-top))] sm:px-6">
-      <div className="pointer-events-none absolute left-1/2 top-[-170px] h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-accent/10 blur-[95px]" />
-      <div className="relative mx-auto flex min-h-[calc(100vh-32px)] w-full max-w-[460px] flex-col">
-        <div className="mb-5 flex items-center justify-between">
-          <ProjectYouLogo compact markClassName="h-8 w-8" />
-          <span className="text-[11px] font-medium text-text-3">Step {step + 1} of {TOTAL_STEPS}</span>
-        </div>
-        <div className="py-progress-track mb-8"><div className="py-progress-fill transition-all duration-300" style={{ width: `${pct}%` }} /></div>
+    <main className="min-h-screen bg-[#050509] text-white">
+      <div className="relative mx-auto min-h-[852px] w-full max-w-[393px] overflow-hidden px-[18px] pb-[28px] pt-[24px]">
+        {step < 4 ? <><div className="text-[11px] font-semibold text-[#9A9AA8]">{step + 1} of 5</div><div className="mt-[10px] h-[6px] w-full overflow-hidden rounded-full bg-[#151521]"><div className="h-full rounded-full bg-[#8B5CF6] transition-all duration-300" style={{ width: `${(step + 1) * 20}%` }} /></div></> : null}
+        <div className={step < 4 ? "mt-[28px]" : ""}>
+          {step === 0 && <>
+            <Header title="What matters most right now?" sub="Choose up to four areas. Project You+ will use these to prioritize your plan." />
+            <div className="mt-[26px] grid grid-cols-2 gap-x-[15px] gap-y-[12px]">{PRIORITIES.map(([title, copy]) => <ChoiceCard key={title} title={title} copy={copy} active={priorities.includes(title)} onClick={() => toggle(setPriorities, title, 4)} />)}</div>
+            <Card className="mt-[28px] p-[14px]"><div className="text-[14px] font-semibold">What would make the next 90 days a win?</div><input value={ninetyDayWin} onChange={(event) => setNinetyDayWin(event.target.value)} className="mt-[10px] h-[46px] w-full rounded-[14px] border-0 bg-[#151521] px-[12px] text-[12px] text-white outline-none placeholder:text-[#9A9AA8] focus:ring-1 focus:ring-[#8B5CF6]" placeholder="Example: lose 10 lb, save $5k, launch MVP…" /></Card>
+            <Card className="mt-[16px] flex h-[74px] items-center gap-[10px] px-[14px]"><div className="h-[28px] w-[28px] shrink-0 rounded-full bg-[#8B5CF6]" /><div><div className="text-[12px] font-semibold">Why this matters</div><div className="mt-[4px] text-[11px] leading-[14px] text-[#9A9AA8]">Your priorities control what appears in Today, your AI Coach, and your weekly review.</div></div></Card>
+          </>}
 
-        <div className="flex-1">
-          {step === 0 && (
-            <StepShell eyebrow="Priorities" title="What are you building?" sub="Start with what matters most. Project You+ will turn this into your first operating plan.">
-              <div className="space-y-4">
-                <Field label="Your name"><input autoFocus value={answers.name} onChange={(event) => update("name", event.target.value)} placeholder="What should we call you?" className="py-input" /></Field>
-                <div><FieldLabel>What matters most right now?</FieldLabel><ChoiceGrid options={FOCUS_AREAS} selected={answers.focusAreas} onSelect={(value) => toggleArray("focusAreas", value)} /></div>
-                <div><FieldLabel>Your top 3 goals</FieldLabel><div className="space-y-2.5">{[0, 1, 2].map((index) => <input key={index} value={answers.topGoals[index]} onChange={(event) => { const goals = [...answers.topGoals]; goals[index] = event.target.value; update("topGoals", goals); }} placeholder={`${index + 1}. I want to…`} className="py-input" />)}</div></div>
-                <Field label="What would make the next year feel successful?"><textarea value={answers.idealLifeOneYear} onChange={(event) => update("idealLifeOneYear", event.target.value)} rows={4} placeholder="A year from now…" className="py-input resize-none leading-6" /></Field>
-              </div>
-            </StepShell>
-          )}
+          {step === 1 && <>
+            <Header title="Design around your real life." sub="Tell us when you have time, energy, and non-negotiable commitments." />
+            <Card className="mt-[26px] p-[14px]"><SectionTitle>Typical workday</SectionTitle><div className="mt-[14px] grid grid-cols-2 gap-[23px]"><TimeBox value={workStart} onChange={setWorkStart} /><TimeBox value={workEnd} onChange={setWorkEnd} /></div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>When do you usually have personal time?</SectionTitle><div className="mt-[14px] grid grid-cols-2 gap-x-[23px] gap-y-[12px]">{PERSONAL_TIME.map((item) => <MiniChoice key={item} active={personalTime.includes(item)} onClick={() => toggle(setPersonalTime, item)}>{item}</MiniChoice>)}</div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>When is your energy usually highest?</SectionTitle><div className="mt-[16px] grid grid-cols-3 gap-[5px]">{ENERGY.map((item) => <PillChoice key={item} active={peakEnergy === item} onClick={() => setPeakEnergy(item)}>{item}</PillChoice>)}</div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>What should Project You+ protect?</SectionTitle><div className="mt-[16px] grid grid-cols-3 gap-[5px]">{PROTECTED.map(([title, sub]) => <SmallCard key={title} title={title} sub={sub} active={protectedItems.includes(title)} onClick={() => toggle(setProtectedItems, title)} />)}</div></Card>
+          </>}
 
-          {step === 1 && (
-            <StepShell eyebrow="Reality" title="How does your real life work?" sub="The plan should fit your schedule, not fight it.">
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3"><Field label="Wake"><input type="time" value={answers.wakeTime} onChange={(event) => update("wakeTime", event.target.value)} className="py-input" /></Field><Field label="Sleep"><input type="time" value={answers.sleepTime} onChange={(event) => update("sleepTime", event.target.value)} className="py-input" /></Field></div>
-                <Field label="Work / primary activity"><input value={answers.primaryActivity} onChange={(event) => update("primaryActivity", event.target.value)} placeholder="e.g. 9–7 sales schedule" className="py-input" /></Field>
-                <div className="grid grid-cols-2 gap-3"><Field label="Time you can protect daily"><select value={answers.availableDailyTime} onChange={(event) => update("availableDailyTime", event.target.value)} className="py-input"><option>30 minutes</option><option>60–90 minutes</option><option>2–3 hours</option><option>3+ hours</option></select></Field><Field label="Best energy"><select value={answers.peakEnergy} onChange={(event) => update("peakEnergy", event.target.value)} className="py-input"><option>Morning</option><option>Midday</option><option>Afternoon</option><option>Evening</option></select></Field></div>
-                <div><FieldLabel>What gets in the way?</FieldLabel><ChoiceGrid options={OBSTACLES} selected={answers.holdingBack ? answers.holdingBack.split(" | ") : []} onSelect={togglePipe} /></div>
-                <Field label="Protected commitments"><input value={answers.protectedCommitments} onChange={(event) => update("protectedCommitments", event.target.value)} placeholder="Family time, school pickup, religious commitments…" className="py-input" /></Field>
-              </div>
-            </StepShell>
-          )}
+          {step === 2 && <>
+            <Header title="How do you want to feel and perform?" sub="We’ll personalize nutrition, workouts, recovery, and daily health targets around your goals." />
+            <Card className="mt-[26px] p-[14px]"><SectionTitle>Primary health goal</SectionTitle><div className="mt-[14px] grid grid-cols-2 gap-x-[23px] gap-y-[10px]">{HEALTH_GOALS.map((item) => <MiniChoice key={item} active={healthGoals.includes(item)} onClick={() => toggle(setHealthGoals, item, 2)}>{item}</MiniChoice>)}</div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>Training frequency</SectionTitle><div className="mt-[14px] grid grid-cols-3 gap-[5px]">{TRAINING.map(([title, sub]) => <SmallCard key={title} title={title} sub={sub} active={training === title} onClick={() => setTraining(title)} strong />)}</div></Card>
+            <Card className="mt-[16px] flex min-h-[108px] items-center justify-between gap-[12px] p-[14px]"><div className="max-w-[245px]"><SectionTitle>Nutrition tracking</SectionTitle><p className="mb-0 mt-[12px] text-[11px] leading-[15px] text-[#9A9AA8]">Use meal photos to estimate calories and macros, then let me confirm before saving.</p></div><button type="button" aria-label="Toggle nutrition tracking" onClick={() => setNutritionTracking((value) => !value)} className={`relative h-[30px] w-[50px] shrink-0 rounded-full transition ${nutritionTracking ? "bg-[#8B5CF6]" : "bg-[#292938]"}`}><span className={`absolute top-[3px] h-[24px] w-[24px] rounded-full bg-white transition-all ${nutritionTracking ? "left-[23px]" : "left-[3px]"}`} /></button></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>Daily recovery targets</SectionTitle><div className="mt-[16px] grid grid-cols-3 gap-[5px]"><Metric label="Sleep" value="7–8 h" /><Metric label="Water" value="80 oz" /><Metric label="Steps" value="10k" /></div></Card>
+          </>}
 
-          {step === 2 && (
-            <StepShell eyebrow="Body & routines" title="What does better health look like for you?" sub="We’ll tune recommendations to your current energy, training, and daily habits.">
-              <div className="space-y-5">
-                <div><FieldLabel>Current health & energy</FieldLabel><RadioList options={HEALTH} selected={answers.healthEnergyRating} onSelect={(value) => update("healthEnergyRating", value)} /></div>
-                <Field label="Exercise frequency"><select value={answers.exerciseFrequency} onChange={(event) => update("exerciseFrequency", event.target.value)} className="py-input"><option value="">Choose one</option><option>Rarely or never</option><option>1–2x per week</option><option>3–4x per week</option><option>5+ times per week</option></select></Field>
-                <div><FieldLabel>Habits you want to build</FieldLabel><ChoiceGrid options={HABITS} selected={answers.habitsToBuild ? answers.habitsToBuild.split(", ") : []} onSelect={toggleHabits} /></div>
-                <Field label="One habit you want to reduce"><input value={answers.habitsToEliminate} onChange={(event) => update("habitsToEliminate", event.target.value)} placeholder="Late-night scrolling, takeout, skipping workouts…" className="py-input" /></Field>
-                <button type="button" onClick={() => update("nutritionPhotoTracking", !answers.nutritionPhotoTracking)} className="flex w-full items-center justify-between rounded-[16px] border border-border bg-surface p-4 text-left"><div><div className="text-[14px] font-semibold text-text-1">Photo nutrition tracking</div><div className="mt-1 text-[12px] leading-relaxed text-text-2">Photograph meals and let AI estimate macros for review.</div></div><Toggle checked={answers.nutritionPhotoTracking} /></button>
-              </div>
-            </StepShell>
-          )}
+          {step === 3 && <>
+            <Header title="How should Project You+ help?" sub="Set your money focus, coaching style, and which data you want connected." />
+            <Card className="mt-[26px] p-[14px]"><SectionTitle>Money focus</SectionTitle><div className="mt-[14px] grid grid-cols-2 gap-x-[23px] gap-y-[10px]">{MONEY.map((item) => <MiniChoice key={item} active={moneyGoals.includes(item)} onClick={() => toggle(setMoneyGoals, item)}>{item}</MiniChoice>)}</div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>How should your AI Coach communicate?</SectionTitle><div className="mt-[16px] grid grid-cols-3 gap-[5px]">{COACH.map(([title, sub]) => <SmallCard key={title} title={title} sub={sub} active={coachStyle === title} onClick={() => setCoachStyle(title)} />)}</div></Card>
+            <Card className="mt-[16px] p-[14px]"><SectionTitle>Connect now for better personalization</SectionTitle><div className="mt-[12px] space-y-[2px]">{CONNECTIONS.map(([title, sub]) => { const active = connections.includes(title); return <button key={title} type="button" onClick={() => toggle(setConnections, title)} className="flex h-[36px] w-full items-center rounded-[12px] bg-[#151521] px-[10px] text-left"><span className="w-[102px] text-[11px] font-semibold text-white">{title}</span><span className="flex-1 text-[9px] text-[#9A9AA8]">{sub}</span><span className={`flex h-[24px] w-[54px] items-center justify-center rounded-full text-[9px] font-semibold ${active ? "bg-[#8B5CF6] text-white" : "bg-[#1B1B29] text-[#9A9AA8]"}`}>{active ? "On" : "Later"}</span></button>; })}</div></Card>
+            <Card className="mt-[14px] flex h-[54px] items-center px-[14px] text-[10.5px] leading-[14px] text-[#9A9AA8]">These are personalization preferences for this web test. External provider connections are enabled separately.</Card>
+          </>}
 
-          {step === 3 && (
-            <StepShell eyebrow="Money & coaching" title="How should Project You+ help you make decisions?" sub="Your financial context and coaching style change what advice is useful.">
-              <div className="space-y-5">
-                <div><FieldLabel>Current financial position</FieldLabel><RadioList options={FINANCE} selected={answers.financeDescription} onSelect={(value) => update("financeDescription", value)} /></div>
-                <div><FieldLabel>Financial goals</FieldLabel><ChoiceGrid options={MONEY_GOALS} selected={answers.moneyGoals} onSelect={(value) => toggleArray("moneyGoals", value)} /></div>
-                <div><FieldLabel>AI Coach style</FieldLabel><ChoiceGrid options={COACHING} selected={answers.coachingStyle} onSelect={(value) => toggleArray("coachingStyle", value)} /></div>
-              </div>
-            </StepShell>
-          )}
-
-          {step === 4 && (
-            <StepShell eyebrow="Connections" title="Build your Project You+ system." sub="Choose which data sources you may want to connect. You can change every permission later.">
-              <div className="space-y-4">
-                <div className="py-card px-4">
-                  {CONNECTIONS.map((connection) => {
-                    const active = answers.connectionPrefs.includes(connection);
-                    return <button key={connection} type="button" onClick={() => toggleArray("connectionPrefs", connection)} className="py-list-row w-full text-left"><span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-text-1">{connection}</span><span className="mt-0.5 block text-[11.5px] text-text-2">Optional · connect when you&apos;re ready</span></span><span className={`flex h-6 w-6 items-center justify-center rounded-full border ${active ? "border-accent bg-accent text-white" : "border-border"}`}>{active ? "✓" : ""}</span></button>;
-                  })}
-                </div>
-                <div className="py-accent-card p-4">
-                  <div className="py-section-label text-accent-text">Your starting system</div>
-                  <div className="mt-3 grid grid-cols-2 gap-2.5">
-                    <Summary label="Priorities" value={`${answers.focusAreas.length || 0} selected`} />
-                    <Summary label="Goals" value={`${answers.topGoals.filter(Boolean).length || 0} defined`} />
-                    <Summary label="Daily capacity" value={answers.availableDailyTime} />
-                    <Summary label="Coach" value={answers.coachingStyle[0] ?? "Personalized"} />
-                  </div>
-                  <p className="mb-0 mt-3 text-[11.5px] leading-relaxed text-text-2">Project You+ will use this to create your first goals, habits, planning rhythm, and AI coaching context.</p>
-                </div>
-              </div>
-            </StepShell>
-          )}
+          {step === 4 && <div className="pt-[54px]">
+            <div className="pointer-events-none absolute left-[-18px] top-[-120px] h-[350px] w-[430px] rounded-full bg-[radial-gradient(circle,rgba(139,92,246,.16)_0%,transparent_68%)]" />
+            <div className="relative mx-auto flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[#8B5CF6] text-[18px] font-bold">✓</div>
+            <h1 className="relative mt-[26px] text-center text-[27px] font-bold leading-[32px] tracking-[-0.035em]">Your Project You+ plan is ready.</h1>
+            <p className="relative mx-auto mt-[10px] w-[337px] text-center text-[13px] leading-[17px] text-[#9A9AA8]">We built your starting system around your priorities, schedule, health, money, and coaching preferences.</p>
+            <Card className="relative mt-[30px] h-[132px] bg-[#151521] p-[16px]"><div className="text-[17px] font-semibold">Your starting focus</div><div className="mt-[8px] truncate text-[20px] font-bold">{selectedPriorityText}</div><p className="mt-[10px] text-[11px] leading-[15px] text-[#9A9AA8]">Your Today screen will favor actions that support these areas first.</p></Card>
+            <Card className="relative mt-[16px] p-[16px]"><div className="text-[17px] font-semibold">Recommended starting system</div><SummaryRow label="Morning" value="10-min plan + protein-first breakfast" /><SummaryRow label="Work" value="2 protected high-impact blocks" /><SummaryRow label="Fitness" value={`${training} strength sessions / week`} /><SummaryRow label="Money" value={moneyGoals[0] ?? "Weekly cash-flow review"} /><SummaryRow label="Review" value="Sunday weekly review + next-week plan" /></Card>
+            <Card className="relative mt-[16px] p-[16px]"><div className="text-[14px] font-semibold">Connected context</div><div className="mt-[14px] grid grid-cols-3 gap-[5px]">{["Apple Health", "Calendar", "Money"].map((item) => <div key={item} className={`flex h-[36px] items-center rounded-[12px] px-[10px] text-[10px] font-medium ${connections.includes(item) || (item === "Money" && moneyGoals.length) ? "bg-[#1B1B29] text-white" : "bg-[#151521] text-[#9A9AA8]"}`}>{item}</div>)}</div></Card>
+          </div>}
         </div>
 
-        {error && <p role="alert" className="mt-4 text-danger">{error}</p>}
-        <div className="mt-8 flex items-center gap-3 pb-[max(0px,env(safe-area-inset-bottom))]">
-          {step > 0 && <button onClick={back} className="py-button-secondary min-w-[92px]">Back</button>}
-          {step < TOTAL_STEPS - 1 ? <button onClick={next} disabled={!canContinue} className="py-button-primary flex-1 disabled:opacity-40">Continue</button> : <button onClick={finish} disabled={isPending} className="py-button-primary flex-1 disabled:opacity-60">{isPending ? "Building your plan…" : "Create my Project You+ plan"}</button>}
+        {error && <p role="alert" className="mt-[12px] text-[12px] text-[#FF7A88]">{error}</p>}
+        <div className={`${step === 4 ? "mt-[30px]" : "mt-[28px]"} flex gap-[10px] pb-[max(0px,env(safe-area-inset-bottom))]`}>
+          {step > 0 && step < 4 && <button type="button" onClick={() => { setError(null); setStep((current) => current - 1); }} className="h-[54px] min-w-[82px] rounded-[17px] border border-[#292938] bg-[#151521] text-[13px] font-semibold text-white">Back</button>}
+          {step < 4 ? <button type="button" onClick={next} className="h-[54px] flex-1 rounded-[17px] bg-[#8B5CF6] text-[14px] font-semibold text-white active:scale-[.99]">Continue</button> : <button type="button" onClick={finish} disabled={isPending} className="h-[56px] w-full rounded-[18px] bg-[#8B5CF6] text-[14px] font-semibold text-white active:scale-[.99] disabled:opacity-60">{isPending ? "Building your plan…" : "Enter Project You+"}</button>}
         </div>
       </div>
     </main>
   );
 }
 
-function StepShell({ eyebrow, title, sub, children }: { eyebrow: string; title: string; sub: string; children: React.ReactNode }) {
-  return <section><div className="py-eyebrow mb-2 text-accent-text">{eyebrow}</div><h1 className="m-0 max-w-[410px] text-[30px] font-bold leading-[1.08] tracking-[-0.045em] text-text-1">{title}</h1><p className="mb-6 mt-2 max-w-[405px] text-[13.5px] leading-relaxed text-text-2">{sub}</p>{children}</section>;
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><FieldLabel>{label}</FieldLabel>{children}</label>; }
-function FieldLabel({ children }: { children: React.ReactNode }) { return <span className="mb-2 block text-[11.5px] font-semibold text-text-2">{children}</span>; }
-function ChoiceGrid({ options, selected, onSelect }: { options: string[]; selected: string[]; onSelect: (value: string) => void }) {
-  return <div className="grid grid-cols-2 gap-2">{options.map((option) => { const active = selected.includes(option); return <button key={option} type="button" onClick={() => onSelect(option)} className={`min-h-[48px] rounded-[14px] border px-3 py-2.5 text-left text-[12.5px] font-medium transition ${active ? "border-accent bg-accent-soft text-text-1" : "border-border bg-surface text-text-2"}`}>{option}</button>; })}</div>;
-}
-function RadioList({ options, selected, onSelect }: { options: string[]; selected: string; onSelect: (value: string) => void }) {
-  return <div className="space-y-2">{options.map((option) => { const active = selected === option; return <button key={option} type="button" onClick={() => onSelect(option)} className={`flex min-h-[48px] w-full items-center gap-3 rounded-[14px] border px-4 text-left text-[13px] font-medium transition ${active ? "border-accent bg-accent-soft text-text-1" : "border-border bg-surface text-text-2"}`}><span className={`h-4 w-4 rounded-full border-[1.5px] ${active ? "border-[5px] border-accent" : "border-border"}`} />{option}</button>; })}</div>;
-}
-function Toggle({ checked }: { checked: boolean }) { return <span className="relative h-6 w-[42px] shrink-0 rounded-full" style={{ background: checked ? "var(--accent)" : "var(--border)" }}><span className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-transform" style={{ transform: checked ? "translateX(21px)" : "translateX(3px)" }} /></span>; }
-function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-[14px] bg-[rgba(255,255,255,.04)] p-3"><div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-3">{label}</div><div className="mt-1 text-[12.5px] font-semibold text-text-1">{value}</div></div>; }
+function Header({ title, sub }: { title: string; sub: string }) { return <><h1 className="m-0 text-[28px] font-bold leading-[32px] tracking-[-0.035em] text-white">{title}</h1><p className="mb-0 mt-[7px] max-w-[345px] text-[13px] leading-[16px] text-[#9A9AA8]">{sub}</p></>; }
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) { return <section className={`rounded-[18px] bg-[#0D0D14] ${className}`}>{children}</section>; }
+function SectionTitle({ children }: { children: React.ReactNode }) { return <div className="text-[14px] font-semibold text-white">{children}</div>; }
+function ChoiceCard({ title, copy, active, onClick }: { title: string; copy: string; active: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`relative min-h-[68px] rounded-[16px] border px-[11px] py-[10px] text-left transition ${active ? "border-[1.5px] border-[#8B5CF6] bg-[#1B1B29]" : "border-transparent bg-[#0D0D14]"}`}><span className="block pr-[24px] text-[14px] font-semibold text-white">{title}</span><span className="mt-[6px] block text-[10px] leading-[12px] text-[#9A9AA8]">{copy}</span>{active && <span className="absolute right-[10px] top-[9px] flex h-[20px] w-[20px] items-center justify-center rounded-full bg-[#8B5CF6] text-[10px] font-semibold text-white">✓</span>}</button>; }
+function MiniChoice({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`h-[34px] rounded-[12px] border px-[10px] text-left text-[11px] font-medium ${active ? "border-[#8B5CF6] bg-[#1B1B29] text-white" : "border-transparent bg-[#151521] text-[#9A9AA8]"}`}>{children}</button>; }
+function PillChoice({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`h-[34px] rounded-[12px] text-[11px] font-semibold ${active ? "bg-[#8B5CF6] text-white" : "bg-[#151521] text-[#9A9AA8]"}`}>{children}</button>; }
+function SmallCard({ title, sub, active, onClick, strong = false }: { title: string; sub: string; active: boolean; onClick: () => void; strong?: boolean }) { return <button type="button" onClick={onClick} className={`h-[52px] rounded-[12px] px-[9px] text-left ${active ? "bg-[#8B5CF6] text-white" : "bg-[#151521] text-white"}`}><span className={`block ${strong ? "text-[14px]" : "text-[10.5px]"} font-semibold`}>{title}</span><span className={`mt-[5px] block text-[9px] ${active ? "text-white/90" : "text-[#9A9AA8]"}`}>{sub}</span></button>; }
+function TimeBox({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <input type="time" value={value} onChange={(event) => onChange(event.target.value)} className="h-[48px] w-full rounded-[14px] border-0 bg-[#151521] px-[14px] text-[14px] font-medium text-white outline-none [color-scheme:dark] focus:ring-1 focus:ring-[#8B5CF6]" />; }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="h-[52px] rounded-[12px] bg-[#151521] px-[10px] py-[8px]"><div className="text-[10px] text-[#9A9AA8]">{label}</div><div className="mt-[5px] text-[14px] font-semibold text-white">{value}</div></div>; }
+function SummaryRow({ label, value }: { label: string; value: string }) { return <div className="mt-[13px] flex items-center gap-[12px]"><span className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#8B5CF6]" /><span className="w-[54px] text-[11px] font-semibold text-white">{label}</span><span className="min-w-0 flex-1 truncate text-[10px] text-[#9A9AA8]">{value}</span></div>; }
