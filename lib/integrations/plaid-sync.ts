@@ -12,12 +12,15 @@ export async function syncPlaidForUser(userId: string) {
   const accountMap = new Map<string, string>();
 
   for (const account of accountResponse.accounts ?? []) {
+    const accountType = mapAccountType(account.type, account.subtype);
+    const rawBalance = Number(account.balances?.current ?? 0);
+    const balance = accountType === "credit" ? -Math.abs(rawBalance) : rawBalance;
     const { data: existing } = await admin.from("finance_accounts").select("id").eq("user_id", userId).eq("connected_via", "plaid").eq("provider_account_id", account.account_id).maybeSingle();
     const payload = {
       user_id: userId,
       name: account.official_name || account.name,
-      account_type: mapAccountType(account.type, account.subtype),
-      balance: Number(account.balances?.current ?? 0),
+      account_type: accountType,
+      balance,
       institution: null,
       connected_via: "plaid",
       provider_account_id: account.account_id,
