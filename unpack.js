@@ -3,7 +3,13 @@ const path = require("path");
 const zlib = require("zlib");
 
 const root = process.cwd();
-const partNames = ["source.bundle.part1", "source.bundle.part2", "source.bundle.part3"];
+const partNames = [
+  "source.bundle.part1",
+  "source.bundle.part2",
+  "source.bundle.part3",
+  "source.bundle.part4",
+  "source.bundle.part5",
+];
 
 for (const partName of partNames) {
   if (!fs.existsSync(path.join(root, partName))) {
