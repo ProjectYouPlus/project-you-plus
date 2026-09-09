@@ -9,67 +9,38 @@ import { getSiteUrl } from "@/lib/supabase/env";
 export type AuthResult = { error: string | null; message?: string };
 
 export async function signIn(formData: FormData): Promise<AuthResult> {
-  if (isDemoMode) redirect("/today");
-
+  if (isDemoMode) redirect("/dashboard");
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const supabase = await createClient();
-
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
-
-  redirect("/today");
+  redirect("/dashboard");
 }
 
 export async function signUp(formData: FormData): Promise<AuthResult> {
   if (isDemoMode) redirect("/onboarding");
-
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const supabase = await createClient();
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { full_name: fullName || undefined },
-      emailRedirectTo: `${getSiteUrl()}/auth/confirm`,
-    },
-  });
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName || undefined }, emailRedirectTo: `${getSiteUrl()}/auth/confirm` } });
   if (error) return { error: error.message };
-
-  // If email confirmation is disabled for a private testing project,
-  // Supabase returns a session immediately and we can start onboarding.
   if (data.session) redirect("/onboarding");
-
-  // With email confirmation enabled, wait for the confirmation endpoint to
-  // establish the cookie session before allowing onboarding/database writes.
-  return {
-    error: null,
-    message: "Account created. Check your email, confirm your address, then you’ll continue into onboarding.",
-  };
+  return { error: null, message: "Account created. Check your email, confirm your address, then you’ll continue into onboarding." };
 }
 
 export async function requestPasswordReset(formData: FormData): Promise<AuthResult> {
   if (isDemoMode) return { error: null };
-
   const email = String(formData.get("email") ?? "");
   const supabase = await createClient();
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${getSiteUrl()}/auth/confirm?next=/reset-password`,
-  });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${getSiteUrl()}/auth/confirm?next=/reset-password` });
   if (error) return { error: error.message };
-
   return { error: null, message: "Password reset email sent." };
 }
 
 export async function signOut() {
-  if (!isDemoMode) {
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-  }
+  if (!isDemoMode) { const supabase = await createClient(); await supabase.auth.signOut(); }
   revalidatePath("/", "layout");
   redirect("/login");
 }
