@@ -1,121 +1,169 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { saveNutritionMeal, type NutritionFood } from "@/lib/actions/nutrition";
 
-type Food = { name: string; portion: number; unit: string; calories: number; protein: number; carbs: number; fat: number };
+type AnalysisResult = {
+  mealName: string;
+  confidence: number;
+  foods: NutritionFood[];
+  note: string;
+};
 
-const INITIAL: Food[] = [
-  { name: "Grilled chicken", portion: 6, unit: "oz", calories: 280, protein: 52, carbs: 0, fat: 6 },
-  { name: "White rice", portion: 1, unit: "cup", calories: 205, protein: 4, carbs: 45, fat: 0 },
-  { name: "Black beans", portion: 0.5, unit: "cup", calories: 114, protein: 8, carbs: 20, fat: 0 },
-  { name: "Avocado", portion: 0.25, unit: "whole", calories: 80, protein: 1, carbs: 4, fat: 7 },
-];
+type Stage = "capture" | "analyzing" | "review";
+
+const EMPTY_FOOD: NutritionFood = { name: "", portion: 1, unit: "serving", calories: 0, protein: 0, carbs: 0, fat: 0 };
 
 export function MealScanReview() {
   const router = useRouter();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [analyzed, setAnalyzed] = useState(false);
-  const [foods, setFoods] = useState(INITIAL);
-  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<Stage>("capture");
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [mealName, setMealName] = useState("Meal");
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [foods, setFoods] = useState<NutritionFood[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<"openai" | "manual">("manual");
+  const [isSaving, startSaving] = useTransition();
 
   const totals = useMemo(() => foods.reduce((sum, food) => ({
-    calories: sum.calories + food.calories,
-    protein: sum.protein + food.protein,
-    carbs: sum.carbs + food.carbs,
-    fat: sum.fat + food.fat,
+    calories: sum.calories + Number(food.calories || 0),
+    protein: sum.protein + Number(food.protein || 0),
+    carbs: sum.carbs + Number(food.carbs || 0),
+    fat: sum.fat + Number(food.fat || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 }), [foods]);
 
-  function chooseFile(file?: File) {
+  async function chooseFile(file?: File) {
     if (!file) return;
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
-    setImageUrl(URL.createObjectURL(file));
-    setAnalyzed(true);
+    setError(null);
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
+      setError("Choose a JPEG, PNG, or WEBP meal photo.");
+      return;
+    }
+    if (file.size > 14 * 1024 * 1024) {
+      setError("That photo is too large. Choose a photo under 14 MB.");
+      return;
+    }
+
+    const dataUrl = await readFile(file);
+    setImageDataUrl(dataUrl);
+    setStage("analyzing");
+
+    try {
+      const response = await fetch("/api/nutrition-ai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: dataUrl }),
+      });
+      const data = await response.json() as { result?: AnalysisResult; mode?: "openai"; error?: string; code?: string };
+      if (!response.ok || !data.result) throw new Error(data.error || "Nutrition AI could not analyze this image.");
+      setMealName(data.result.mealName || "Meal");
+      setConfidence(data.result.confidence);
+      setNote(data.result.note || "Review the estimate before saving.");
+      setFoods(data.result.foods || []);
+      setSource("openai");
+      setStage("review");
+    } catch (analysisError) {
+      setError(analysisError instanceof Error ? analysisError.message : "Nutrition AI could not analyze this image.");
+      setMealName("Meal");
+      setFoods([{ ...EMPTY_FOOD }]);
+      setConfidence(null);
+      setNote("Enter the foods manually or retry the photo. Nothing will be saved until you confirm it.");
+      setSource("manual");
+      setStage("review");
+    }
   }
 
-  function changePortion(index: number, delta: number) {
-    setFoods((items) => items.map((food, i) => {
-      if (i !== index) return food;
-      const next = Math.max(0.25, Math.round((food.portion + delta) * 4) / 4);
-      const ratio = next / food.portion;
-      return {
-        ...food,
-        portion: next,
-        calories: Math.round(food.calories * ratio),
-        protein: Math.round(food.protein * ratio),
-        carbs: Math.round(food.carbs * ratio),
-        fat: Math.round(food.fat * ratio),
-      };
-    }));
+  function updateFood(index: number, key: keyof NutritionFood, value: string | number) {
+    setFoods((current) => current.map((food, i) => i === index ? { ...food, [key]: key === "name" || key === "unit" ? value : Math.max(0, Number(value) || 0) } : food));
+  }
+
+  function removeFood(index: number) {
+    setFoods((current) => current.filter((_, i) => i !== index));
+  }
+
+  function reset() {
+    setStage("capture");
+    setImageDataUrl(null);
+    setMealName("Meal");
+    setConfidence(null);
+    setFoods([]);
+    setNote("");
+    setError(null);
+    setSource("manual");
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   function save() {
-    setSaving(true);
-    window.localStorage.setItem("project-you-last-meal", JSON.stringify({ foods, totals, savedAt: new Date().toISOString() }));
-    setTimeout(() => {
-      router.push("/health?mealSaved=1");
-      router.refresh();
-    }, 350);
+    if (!foods.length || foods.some((food) => !food.name.trim())) {
+      setError("Name each food before saving.");
+      return;
+    }
+    setError(null);
+    startSaving(() => {
+      void (async () => {
+        const result = await saveNutritionMeal({ mealName, foods, source });
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
+        router.push("/health?mealSaved=1");
+        router.refresh();
+      })();
+    });
   }
 
-  if (!analyzed) {
-    return (
-      <div className="space-y-4">
-        <label className="py-accent-card flex min-h-[300px] cursor-pointer flex-col items-center justify-center p-6 text-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft text-[32px] text-accent-text">◎</span>
-          <span className="mt-5 text-[20px] font-semibold text-text-1">Take a photo of your meal</span>
-          <span className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-text-2">Project You+ will identify the foods, estimate portions, and build a macro estimate for you to review.</span>
-          <span className="py-button-primary mt-5">Open camera</span>
-          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => chooseFile(event.target.files?.[0])} />
-        </label>
-        <p className="m-0 px-2 text-center text-[11.5px] leading-relaxed text-text-3">Estimates can be imperfect. You always review and edit before anything is saved.</p>
-      </div>
-    );
+  if (stage === "capture") {
+    return <div className="space-y-4">
+      <label className="py-glass-hero py-pressable flex min-h-[330px] cursor-pointer flex-col items-center justify-center p-7 text-center">
+        <span className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/[.06] text-[28px] text-white">◎</span>
+        <span className="mt-5 text-[24px] font-semibold tracking-[-.03em] text-white">Photograph your meal</span>
+        <span className="mt-2 max-w-[310px] text-[13px] leading-relaxed text-[#C9C5D4]">Nutrition AI identifies visible foods and estimates portions and macros. You review every result before it becomes part of your day.</span>
+        <span className="py-liquid-button mt-6">Open camera</span>
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={(event) => void chooseFile(event.target.files?.[0])} />
+      </label>
+      <button onClick={() => { setFoods([{ ...EMPTY_FOOD }]); setMealName("Meal"); setSource("manual"); setStage("review"); }} className="py-button-secondary w-full">Enter meal manually</button>
+      {error && <p className="m-0 px-2 text-center text-[12px] text-danger">{error}</p>}
+      <p className="m-0 px-3 text-center text-[11px] leading-relaxed text-text-3">Photo-based nutrition is an estimate, not a laboratory measurement. Hidden oils, sauces, ingredients, and portion depth can change the result.</p>
+    </div>;
   }
 
-  return (
-    <div className="space-y-4">
-      <section className="py-card overflow-hidden">
-        <div className="relative h-[190px] bg-[var(--surface-2)]">
-          {imageUrl ? <img src={imageUrl} alt="Meal preview" className="h-full w-full object-cover" /> : null}
-          <span className="absolute right-3 top-3 rounded-full bg-[rgba(5,5,9,.72)] px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">92% confidence</span>
-        </div>
-        <div className="p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-accent-text">AI analysis</div>
-          <div className="mt-1 text-[18px] font-semibold text-text-1">Chicken rice bowl</div>
-          <div className="mt-1 text-[12px] text-text-2">Review portions before saving.</div>
-        </div>
-      </section>
+  if (stage === "analyzing") {
+    return <section className="py-glass-hero flex min-h-[390px] flex-col items-center justify-center p-7 text-center">
+      {imageDataUrl && <img src={imageDataUrl} alt="Meal being analyzed" className="absolute inset-0 h-full w-full object-cover opacity-20" />}
+      <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-black/20 backdrop-blur-xl"><span className="py-pulse-dot h-3 w-3 rounded-full bg-accent-2" /></div>
+      <h2 className="relative z-10 m-0 mt-5 text-[23px] font-semibold tracking-[-.03em] text-white">Nutrition AI is reading your plate</h2>
+      <p className="relative z-10 m-0 mt-2 max-w-[300px] text-[12px] leading-relaxed text-[#C9C5D4]">Identifying foods, estimating portions, and building a reviewable macro estimate.</p>
+    </section>;
+  }
 
-      <section className="py-card px-4">
-        {foods.map((food, index) => (
-          <div key={food.name} className="py-list-row">
-            <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-semibold text-text-1">{food.name}</div>
-              <div className="mt-0.5 text-[11.5px] text-text-2">{food.calories} kcal · {food.protein}g protein</div>
-            </div>
-            <div className="flex items-center gap-2 rounded-full border border-border bg-[var(--surface-2)] p-1">
-              <button onClick={() => changePortion(index, -0.25)} className="flex h-7 w-7 items-center justify-center rounded-full text-[16px] text-text-2">−</button>
-              <span className="min-w-[50px] text-center text-[11.5px] font-semibold text-text-1">{food.portion} {food.unit}</span>
-              <button onClick={() => changePortion(index, 0.25)} className="flex h-7 w-7 items-center justify-center rounded-full text-[16px] text-text-2">+</button>
-            </div>
-          </div>
-        ))}
-      </section>
+  return <div className="space-y-4">
+    {imageDataUrl && <section className="py-glass-soft overflow-hidden">
+      <div className="relative h-[210px] bg-[var(--surface-2)]"><img src={imageDataUrl} alt="Meal preview" className="h-full w-full object-cover" />{confidence != null && <span className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[10.5px] font-semibold text-white backdrop-blur-xl">{Math.round(confidence * 100)}% visual confidence</span>}</div>
+      <div className="p-4"><input value={mealName} onChange={(event) => setMealName(event.target.value)} className="w-full bg-transparent text-[21px] font-semibold tracking-[-.025em] text-text-1 outline-none" aria-label="Meal name" /><p className="m-0 mt-1.5 text-[11.5px] leading-relaxed text-text-3">{note}</p></div>
+    </section>}
 
-      <section className="py-accent-card p-[18px]">
-        <div className="flex items-end justify-between">
-          <div>
-            <div className="py-eyebrow text-accent-text">Estimated total</div>
-            <div className="mt-1 text-[30px] font-bold tracking-[-0.04em] text-text-1">{totals.calories} kcal</div>
-          </div>
-          <div className="text-right text-[11.5px] leading-5 text-text-2">P {totals.protein}g<br />C {totals.carbs}g · F {totals.fat}g</div>
-        </div>
-        <div className="mt-4 rounded-[14px] bg-[rgba(255,255,255,.04)] p-3 text-[12px] leading-relaxed text-text-2">After this meal you&apos;ll be at roughly <span className="font-semibold text-text-1">2,319 kcal</span> and <span className="font-semibold text-text-1">193g protein</span> today.</div>
-      </section>
+    {!imageDataUrl && <section className="py-glass-soft p-4"><h2 className="m-0 text-[19px] font-semibold text-text-1">Manual nutrition entry</h2><input value={mealName} onChange={(event) => setMealName(event.target.value)} className="py-input mt-3" aria-label="Meal name" /></section>}
 
-      <button onClick={save} disabled={saving} className="py-button-primary w-full disabled:opacity-60">{saving ? "Saving macros…" : "Save meal & update today"}</button>
-      <button onClick={() => setAnalyzed(false)} className="py-button-secondary w-full">Use another photo</button>
-    </div>
-  );
+    {error && <div className="rounded-[14px] border border-danger/20 bg-danger/10 px-4 py-3 text-[11.5px] leading-relaxed text-danger">{error}</div>}
+
+    <section className="py-glass-soft overflow-hidden px-4">
+      {foods.map((food, index) => <div key={`${index}-${food.name}`} className="border-t border-white/[.06] py-4 first:border-0">
+        <div className="flex items-center gap-2"><input value={food.name} onChange={(event) => updateFood(index, "name", event.target.value)} placeholder="Food" className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold text-text-1 outline-none" /><button onClick={() => removeFood(index)} className="text-[10.5px] font-medium text-text-3">Remove</button></div>
+        <div className="mt-3 grid grid-cols-2 gap-2"><label className="text-[9.5px] text-text-3">Portion<input type="number" step="0.25" min="0" value={food.portion} onChange={(event) => updateFood(index, "portion", event.target.value)} className="py-input mt-1 min-h-[40px] py-2 text-[12px]" /></label><label className="text-[9.5px] text-text-3">Unit<input value={food.unit} onChange={(event) => updateFood(index, "unit", event.target.value)} className="py-input mt-1 min-h-[40px] py-2 text-[12px]" /></label></div>
+        <div className="mt-2 grid grid-cols-4 gap-1.5">{([['calories','kcal'],['protein','P'],['carbs','C'],['fat','F']] as const).map(([key,label]) => <label key={key} className="text-[9px] text-text-3">{label}<input type="number" min="0" step={key === "calories" ? "1" : "0.1"} value={food[key]} onChange={(event) => updateFood(index, key, event.target.value)} className="mt-1 w-full rounded-[11px] border border-white/[.07] bg-white/[.035] px-2 py-2 text-[11px] text-text-1 outline-none" /></label>)}</div>
+      </div>)}
+      <button onClick={() => setFoods((current) => [...current, { ...EMPTY_FOOD }])} className="mb-4 mt-1 text-[11.5px] font-semibold text-accent-text">+ Add another food</button>
+    </section>
+
+    <section className="py-glass-hero p-5"><div className="flex items-end justify-between gap-4"><div><div className="text-[12px] text-[#C9C5D4]">Estimated meal</div><div className="mt-1 text-[34px] font-bold tracking-[-.04em] text-white">{Math.round(totals.calories)} <span className="text-[14px] font-medium text-[#C9C5D4]">kcal</span></div></div><div className="text-right text-[11.5px] leading-5 text-[#C9C5D4]">P {round(totals.protein)}g<br />C {round(totals.carbs)}g · F {round(totals.fat)}g</div></div><p className="m-0 mt-3 text-[11px] leading-relaxed text-[#AAA4B7]">Saving adds this meal to today’s real Nutrition AI history and makes it available to Dashboard and Coach.</p></section>
+
+    <button onClick={save} disabled={isSaving || !foods.length} className="py-liquid-button w-full disabled:opacity-50">{isSaving ? "Saving nutrition…" : "Save to today"}</button>
+    <button onClick={reset} className="py-button-secondary w-full">{imageDataUrl ? "Use another photo" : "Cancel"}</button>
+  </div>;
 }
+
+function readFile(file: File): Promise<string> { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }
+function round(value: number) { return Math.round(value * 10) / 10; }
