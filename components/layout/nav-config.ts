@@ -25,6 +25,8 @@ export const HEALTH_NAV: NavItem[] = [
 ];
 
 export const SYSTEM_NAV: NavItem[] = [
+  { href: "/accountability", label: "Accountability", icon: "progress" },
+  { href: "/reminders", label: "Alerts", icon: "calendar" },
   { href: "/progress", label: "Progress", icon: "progress" },
   { href: "/review", label: "Weekly Review", icon: "review" },
   { href: "/integrations", label: "Integrations", icon: "integrations" },
@@ -32,7 +34,6 @@ export const SYSTEM_NAV: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-// Compatibility exports for older imports while the product moves to the five-root OS.
 export const PLAN_NAV = ORGANIZE_NAV;
 export const YOU_NAV = [...HEALTH_NAV, ...SYSTEM_NAV];
 export const PRIMARY_NAV = ROOT_NAV;
@@ -46,6 +47,6 @@ export function rootSectionForPath(pathname: string): RootSection {
   if (pathname.startsWith("/coach")) return "/coach";
   if (["/health", "/fitness", "/supplements"].some((path) => pathname.startsWith(path))) return "/health";
   if (["/money", "/finance"].some((path) => pathname.startsWith(path))) return "/money";
-  if (["/goals", "/tasks", "/habits", "/calendar", "/plan", "/profile", "/settings", "/integrations", "/you"].some((path) => pathname.startsWith(path))) return "/you";
+  if (["/goals", "/tasks", "/habits", "/calendar", "/plan", "/profile", "/settings", "/integrations", "/accountability", "/reminders", "/you"].some((path) => pathname.startsWith(path))) return "/you";
   return "/dashboard";
 }
