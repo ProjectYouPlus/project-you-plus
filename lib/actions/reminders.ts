@@ -46,8 +46,7 @@ export async function addReminder(formData: FormData) {
   });
   if (error) return { error: error.message };
 
-  revalidatePath("/reminders");
-  revalidatePath("/dashboard");
+  refreshReminderViews();
   return { error: null };
 }
 
@@ -55,7 +54,7 @@ export async function setReminderEnabled(id: string, enabled: boolean) {
   const supabase = await createClient();
   const { error } = await supabase.from("reminders").update({ enabled, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath("/reminders");
+  refreshReminderViews();
   return { error: null };
 }
 
@@ -63,6 +62,12 @@ export async function deleteReminder(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("reminders").delete().eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath("/reminders");
+  refreshReminderViews();
   return { error: null };
+}
+
+function refreshReminderViews() {
+  revalidatePath("/reminders");
+  revalidatePath("/dashboard");
+  revalidatePath("/you");
 }
