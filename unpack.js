@@ -3,13 +3,19 @@ const path = require("path");
 const zlib = require("zlib");
 
 const root = process.cwd();
-const payloadPath = path.join(root, "source.bundle.b64");
-if (!fs.existsSync(payloadPath)) {
-  console.error("Project You+ source bundle is missing.");
-  process.exit(1);
+const partNames = ["source.bundle.part1", "source.bundle.part2", "source.bundle.part3"];
+
+for (const partName of partNames) {
+  if (!fs.existsSync(path.join(root, partName))) {
+    console.error(`Project You+ source bundle is missing ${partName}.`);
+    process.exit(1);
+  }
 }
 
-const encoded = fs.readFileSync(payloadPath, "utf8").trim();
+const encoded = partNames
+  .map((partName) => fs.readFileSync(path.join(root, partName), "utf8").trim())
+  .join("");
+
 const archive = zlib.gunzipSync(Buffer.from(encoded, "base64"));
 const files = JSON.parse(archive.toString("utf8"));
 
