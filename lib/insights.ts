@@ -33,13 +33,16 @@ export function buildProactiveInsights(args: {
     });
   }
 
-  items.push({
-    id: "score-opportunity",
-    domain: score.opportunity.key === "money" ? "finance" : score.opportunity.key === "fitness" || score.opportunity.key === "sleep" ? "health" : "productivity",
-    type: "observation",
-    content: `${label[score.opportunity.key] ?? score.opportunity.key} is your lowest 1% Score category at ${score.opportunity.value}. Improving it is the clearest way to raise your overall score from ${score.score.score}.`,
-    actionTaken: false,
-  });
+  if (score.opportunity) {
+    const opportunity = score.opportunity;
+    items.push({
+      id: "score-opportunity",
+      domain: opportunity.key === "money" ? "finance" : opportunity.key === "fitness" || opportunity.key === "sleep" ? "health" : "productivity",
+      type: "observation",
+      content: `${label[opportunity.key] ?? opportunity.key} is your lowest calibrated 1% Score category at ${opportunity.value}. Improving it is the clearest way to raise your overall score from ${score.score.score}.`,
+      actionTaken: false,
+    });
+  }
 
   if (weakestHabit) {
     items.push({
@@ -57,6 +60,16 @@ export function buildProactiveInsights(args: {
       domain: slowestGoal.category === "finance" ? "finance" : slowestGoal.category === "fitness" ? "fitness" : "productivity",
       type: "observation",
       content: `${slowestGoal.title} is currently your slowest active goal at ${slowestGoal.progress}% progress. Link at least one task this week directly to its next milestone.`,
+      actionTaken: false,
+    });
+  }
+
+  if (!items.length && score.coveragePct < 40) {
+    items.push({
+      id: "calibration",
+      domain: "productivity",
+      type: "recommendation",
+      content: "Your score is still calibrating. Add one active goal, one real task, and one repeatable habit before optimizing the number.",
       actionTaken: false,
     });
   }
