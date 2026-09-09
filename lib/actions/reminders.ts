@@ -7,8 +7,10 @@ const TARGET_TYPES = new Set(["task", "habit", "workout", "supplement", "custom"
 const RECURRENCES = new Set(["once", "daily", "weekdays", "weekly", "custom"]);
 
 export async function addReminder(formData: FormData) {
-  const targetType = String(formData.get("targetType") ?? "custom");
-  const targetId = String(formData.get("targetId") ?? "").trim() || null;
+  const combinedTarget = String(formData.get("target") ?? "").trim();
+  const [combinedType, combinedId] = combinedTarget.includes(":") ? combinedTarget.split(":", 2) : ["", ""];
+  const targetType = combinedType || String(formData.get("targetType") ?? "custom");
+  const targetId = (combinedId || String(formData.get("targetId") ?? "")).trim() || null;
   const title = String(formData.get("title") ?? "").trim();
   const recurrence = String(formData.get("recurrence") ?? "once");
   const remindAtRaw = String(formData.get("remindAt") ?? "").trim();
