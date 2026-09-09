@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildProjectYouContext } from "@/lib/ai/context";
-import { callClaude, isClaudeConfigured } from "@/lib/ai/anthropic";
+import { callProjectYouAI, hasCloudAI } from "@/lib/ai/provider";
 import { runMyDayPrompt } from "@/lib/ai/prompts";
 import { fallbackRunMyDay } from "@/lib/ai/fallbacks";
 import type { RunMyDayPlan } from "@/lib/types";
@@ -20,19 +20,18 @@ function parsePlan(text: string): RunMyDayPlan | null {
 
 export async function POST() {
   const context = await buildProjectYouContext();
-  if (!isClaudeConfigured()) return NextResponse.json({ plan: fallbackRunMyDay(context), mode: "local" });
+  if (!hasCloudAI()) return NextResponse.json({ plan: fallbackRunMyDay(context), mode: "local" });
 
   try {
-    const text = await callClaude({
+    const result = await callProjectYouAI({
       system: runMyDayPrompt(context),
       messages: [{ role: "user", content: "Generate my optimized day now." }],
-      maxTokens: 900,
-      temperature: 0.2,
+      maxTokens: 1000,
     });
-    const plan = parsePlan(text) ?? fallbackRunMyDay(context);
-    return NextResponse.json({ plan, mode: parsePlan(text) ? "claude" : "local-fallback" });
+    const parsed = parsePlan(result.text);
+    return NextResponse.json({ plan: parsed ?? fallbackRunMyDay(context), mode: parsed ? result.provider : "local-fallback" });
   } catch (error) {
-    console.error("Run My Day fallback:", error);
+    console.error("Run My Day cloud fallback:", error);
     return NextResponse.json({ plan: fallbackRunMyDay(context), mode: "local-fallback" });
   }
 }
