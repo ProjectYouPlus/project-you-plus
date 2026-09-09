@@ -7,7 +7,8 @@ const partNames = [
   "source.bundle.part1",
   "source.bundle.part2",
   "source.bundle.part3",
-  "source.bundle.part4",
+  "source.bundle.part4a",
+  "source.bundle.part4b",
   "source.bundle.part5",
 ];
 
