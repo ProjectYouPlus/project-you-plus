@@ -18,13 +18,16 @@ const PATHS: Record<string, string> = {
   plan: "M4 5h16M4 12h10M4 19h16M18 9v6M15 12h6",
   you: "M20 21v-1a8 8 0 0 0-16 0v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   review: "M4 4h16v16H4zM8 9h8M8 13h5M8 17h7",
+  alerts: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
+  accountability: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  schedule: "M4 6h16M4 12h10M4 18h16M18 9v6",
   more: "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {
   const d = PATHS[name] ?? PATHS.dashboard;
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d={d} />
     </svg>
   );
