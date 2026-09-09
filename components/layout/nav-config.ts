@@ -5,23 +5,26 @@ export interface NavItem {
 }
 
 export const ROOT_NAV: NavItem[] = [
-  { href: "/today", label: "Today", icon: "today" },
-  { href: "/plan", label: "Plan", icon: "plan" },
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/health", label: "Health", icon: "health" },
+  { href: "/money", label: "Finance", icon: "finance" },
   { href: "/coach", label: "Coach", icon: "coach" },
   { href: "/you", label: "You", icon: "you" },
 ];
 
-export const PLAN_NAV: NavItem[] = [
+export const ORGANIZE_NAV: NavItem[] = [
   { href: "/goals", label: "Goals", icon: "goals" },
   { href: "/tasks", label: "Tasks", icon: "tasks" },
+  { href: "/habits", label: "Habits", icon: "habits" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
 ];
 
-export const YOU_NAV: NavItem[] = [
-  { href: "/health", label: "Health", icon: "health" },
+export const HEALTH_NAV: NavItem[] = [
   { href: "/fitness", label: "Fitness", icon: "fitness" },
-  { href: "/money", label: "Money", icon: "money" },
-  { href: "/habits", label: "Habits", icon: "habits" },
+  { href: "/supplements", label: "Supplements", icon: "supplements" },
+];
+
+export const SYSTEM_NAV: NavItem[] = [
   { href: "/progress", label: "Progress", icon: "progress" },
   { href: "/review", label: "Weekly Review", icon: "review" },
   { href: "/integrations", label: "Integrations", icon: "integrations" },
@@ -29,14 +32,20 @@ export const YOU_NAV: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Compatibility exports for older imports while the product moves to the five-root OS.
+export const PLAN_NAV = ORGANIZE_NAV;
+export const YOU_NAV = [...HEALTH_NAV, ...SYSTEM_NAV];
 export const PRIMARY_NAV = ROOT_NAV;
-export const SECONDARY_NAV = [...PLAN_NAV, ...YOU_NAV.slice(0, 5)];
-export const UTILITY_NAV = YOU_NAV.slice(5);
+export const SECONDARY_NAV = [...ORGANIZE_NAV, ...HEALTH_NAV];
+export const UTILITY_NAV = SYSTEM_NAV;
 export const MOBILE_PRIMARY_NAV = ROOT_NAV;
 
-export function rootSectionForPath(pathname: string): "/today" | "/plan" | "/coach" | "/you" {
+export type RootSection = "/dashboard" | "/health" | "/money" | "/coach" | "/you";
+
+export function rootSectionForPath(pathname: string): RootSection {
   if (pathname.startsWith("/coach")) return "/coach";
-  if (["/goals", "/tasks", "/calendar", "/plan"].some((path) => pathname.startsWith(path))) return "/plan";
-  if (["/health", "/fitness", "/money", "/habits", "/progress", "/review", "/integrations", "/profile", "/settings", "/you"].some((path) => pathname.startsWith(path))) return "/you";
-  return "/today";
+  if (["/health", "/fitness", "/supplements"].some((path) => pathname.startsWith(path))) return "/health";
+  if (["/money", "/finance"].some((path) => pathname.startsWith(path))) return "/money";
+  if (["/goals", "/tasks", "/habits", "/calendar", "/plan", "/profile", "/settings", "/integrations", "/you"].some((path) => pathname.startsWith(path))) return "/you";
+  return "/dashboard";
 }
