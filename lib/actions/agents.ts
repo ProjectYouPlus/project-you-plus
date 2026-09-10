@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/owner/access";
 import { runAgentWithOpenAI, type AgentKey } from "@/lib/ai/agent-runtime";
+import { runBuilderFix } from "@/lib/ai/builder-fix-runtime";
 
 const AGENT_KEYS: AgentKey[] = ["orchestrator", "builder", "qa", "backend", "design", "product"];
 
@@ -33,8 +34,8 @@ export async function queueAgentRun(formData: FormData) {
     .insert({
       agent_key: agentKey,
       requested_by: user.id,
-      run_type: runType,
-      title,
+      run_type: agentKey === "builder" ? "fix_pr" : runType,
+      title: agentKey === "builder" ? "Create a safe fix pull request for the highest-priority open root issue" : title,
       status: "queued",
       metadata: { source: "owner_command_center" },
     })
@@ -47,7 +48,11 @@ export async function queueAgentRun(formData: FormData) {
     .update({ status: "queued", last_run_at: now, updated_at: now })
     .eq("agent_key", agentKey);
 
-  await runAgentWithOpenAI({ supabase, runId: Number(run.id), agentKey, title, runType });
+  if (agentKey === "builder") {
+    await runBuilderFix({ supabase, runId: Number(run.id) });
+  } else {
+    await runAgentWithOpenAI({ supabase, runId: Number(run.id), agentKey, title, runType });
+  }
   revalidatePath("/owner/agents");
 }
 
@@ -136,21 +141,15 @@ export async function queueFullAudit() {
       .insert({
         agent_key: "builder",
         requested_by: user.id,
-        run_type: "implementation_plan",
-        title: "Turn the latest prioritized findings into a concrete engineering plan",
+        run_type: "fix_pr",
+        title: "Create a safe fix pull request for the highest-priority open root issue",
         status: "queued",
-        metadata: { source: "orchestrator", batch: now, phase: "implementation_plan" },
+        metadata: { source: "orchestrator", batch: now, phase: "fix_pr" },
       })
       .select("id")
       .single();
     if (error) throw error;
-    await runAgentWithOpenAI({
-      supabase,
-      runId: Number(run.id),
-      agentKey: "builder",
-      title: "Turn the latest prioritized findings into a concrete engineering plan",
-      runType: "implementation_plan",
-    });
+    await runBuilderFix({ supabase, runId: Number(run.id) });
   }
 
   revalidatePath("/owner/agents");
