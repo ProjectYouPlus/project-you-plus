@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
 import { getSiteUrl } from "@/lib/supabase/env";
+import { getBooleanSetting, recordAuthEvent } from "@/lib/analytics/server";
 
 export type AuthResult = { error: string | null; message?: string };
 
@@ -15,6 +16,7 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
+  await recordAuthEvent(supabase, "sign_in", { authMethod: "password", path: "/login" });
   redirect("/dashboard");
 }
 
@@ -24,9 +26,20 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName || undefined }, emailRedirectTo: `${getSiteUrl()}/auth/confirm` } });
+
+  const signupsEnabled = await getBooleanSetting(supabase, "signup_enabled", true);
+  if (!signupsEnabled) return { error: "New Project You+ registrations are temporarily closed." };
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName || undefined }, emailRedirectTo: `${getSiteUrl()}/auth/confirm` },
+  });
   if (error) return { error: error.message };
-  if (data.session) redirect("/onboarding");
+  if (data.session) {
+    await recordAuthEvent(supabase, "sign_up", { authMethod: "email", path: "/signup" });
+    redirect("/onboarding");
+  }
   return { error: null, message: "Account created. Check your email, confirm your address, then you’ll continue into onboarding." };
 }
 
