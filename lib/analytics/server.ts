@@ -27,6 +27,9 @@ export async function recordAuthEvent(
   eventType: AuthEventType,
   options: { authMethod?: string; path?: string | null } = {}
 ) {
+  // Telemetry is paused until consent, retention, access, and deletion controls are in place.
+  return;
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
