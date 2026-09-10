@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-bg">
       <Sidebar profile={profile} isAdmin={isAdmin} disabledModules={disabledModules} />
       <div className="md:pl-[252px]">{children}</div>
-      <BottomNav />
+      <BottomNav disabledModules={disabledModules} />
       {!isDemoMode && <ActivityTracker />}
     </div>
   );
