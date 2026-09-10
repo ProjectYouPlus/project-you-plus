@@ -4,6 +4,18 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
 
+const MODULE_PATHS: Array<[prefix: string, moduleKey: string]> = [
+  ["/health", "health"],
+  ["/money", "money"],
+  ["/finance", "money"],
+  ["/coach", "coach"],
+  ["/fitness", "fitness"],
+  ["/supplements", "supplements"],
+  ["/accountability", "accountability"],
+  ["/reminders", "reminders"],
+  ["/integrations", "integrations"],
+];
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -32,8 +44,6 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refreshes the auth token if it's expired — required for Server Components
-  // to see a valid session. Do not remove this call.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -43,6 +53,9 @@ export async function updateSession(request: NextRequest) {
   const isLandingPath = path === "/" || path === "/welcome";
   const isAuthCallback = path === "/auth/confirm" || path === "/auth/callback";
   const isOnboardingPath = path.startsWith("/onboarding");
+  const isOwnerPath = path.startsWith("/owner");
+  const isMaintenancePath = path === "/maintenance";
+  const isApiPath = path.startsWith("/api/");
 
   function redirectWithCookies(url: URL) {
     const redirected = NextResponse.redirect(url);
@@ -50,8 +63,8 @@ export async function updateSession(request: NextRequest) {
     return redirected;
   }
 
-  if (!user && !isPublicPath && !isLandingPath && !isAuthCallback) {
-    if (path.startsWith("/api/")) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
+  if (!user && !isPublicPath && !isLandingPath && !isAuthCallback && !isMaintenancePath) {
+    if (isApiPath) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = isOnboardingPath ? "/signup" : "/login";
     return redirectWithCookies(url);
@@ -59,9 +72,59 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isPublicPath) {
     const url = request.nextUrl.clone();
-    url.pathname = "/today";
+    url.pathname = "/dashboard";
     return redirectWithCookies(url);
   }
 
+  if (user && !isOwnerPath && !isMaintenancePath && !isAuthCallback && !isApiPath) {
+    const moduleKey = moduleKeyForPath(path);
+    const [maintenanceRes, moduleRes] = await Promise.all([
+      supabase
+        .from("app_settings")
+        .select("value")
+        .eq("setting_key", "maintenance_mode")
+        .maybeSingle(),
+      moduleKey
+        ? supabase
+            .from("app_modules")
+            .select("enabled,rollout_percent")
+            .eq("module_key", moduleKey)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    if (maintenanceRes.data?.value === true) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/maintenance";
+      return redirectWithCookies(url);
+    }
+
+    const module = moduleRes.data;
+    if (
+      moduleKey &&
+      module &&
+      (!module.enabled || rolloutBucket(user.id, moduleKey) >= module.rollout_percent)
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.searchParams.set("module", "unavailable");
+      return redirectWithCookies(url);
+    }
+  }
+
   return response;
+}
+
+function moduleKeyForPath(path: string) {
+  return MODULE_PATHS.find(([prefix]) => path.startsWith(prefix))?.[1] ?? null;
+}
+
+function rolloutBucket(userId: string, moduleKey: string) {
+  const input = `${userId}:${moduleKey}`;
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 100;
 }

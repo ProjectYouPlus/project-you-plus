@@ -10,9 +10,32 @@ import { signOut } from "@/lib/actions/auth";
 import type { Profile } from "@/lib/types";
 import { ProjectYouLogo } from "@/components/brand/project-you-logo";
 
-export function Sidebar({ profile }: { profile: Profile }) {
+const MODULE_BY_HREF: Record<string, string> = {
+  "/health": "health",
+  "/money": "money",
+  "/coach": "coach",
+  "/fitness": "fitness",
+  "/supplements": "supplements",
+  "/accountability": "accountability",
+  "/reminders": "reminders",
+  "/integrations": "integrations",
+};
+
+export function Sidebar({
+  profile,
+  isAdmin = false,
+  disabledModules = [],
+}: {
+  profile: Profile;
+  isAdmin?: boolean;
+  disabledModules?: string[];
+}) {
   const pathname = usePathname();
   const activeRoot = rootSectionForPath(pathname);
+  const disabled = new Set(disabledModules);
+  const rootNav = visibleItems(ROOT_NAV, disabled);
+  const planNav = visibleItems(PLAN_NAV, disabled);
+  const youNav = visibleItems(YOU_NAV, disabled);
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[252px] flex-col border-r border-border bg-[rgba(5,5,9,.94)] px-4 py-6 backdrop-blur-xl md:flex">
@@ -20,7 +43,7 @@ export function Sidebar({ profile }: { profile: Profile }) {
 
       <nav className="flex flex-1 flex-col overflow-y-auto pr-1">
         <div className="space-y-0.5">
-          {ROOT_NAV.map((item) => (
+          {rootNav.map((item) => (
             <SidebarLink key={item.href} item={item} active={activeRoot === item.href} />
           ))}
         </div>
@@ -28,14 +51,28 @@ export function Sidebar({ profile }: { profile: Profile }) {
         <div className="my-4 border-t border-border" />
         <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-text-3">Plan</div>
         <div className="space-y-0.5">
-          {PLAN_NAV.map((item) => <SidebarLink key={item.href} item={item} active={pathname.startsWith(item.href)} compact />)}
+          {planNav.map((item) => <SidebarLink key={item.href} item={item} active={pathname.startsWith(item.href)} compact />)}
         </div>
 
         <div className="my-4 border-t border-border" />
         <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-text-3">You</div>
         <div className="space-y-0.5">
-          {YOU_NAV.map((item) => <SidebarLink key={item.href} item={item} active={pathname.startsWith(item.href)} compact />)}
+          {youNav.map((item) => <SidebarLink key={item.href} item={item} active={pathname.startsWith(item.href)} compact />)}
         </div>
+
+        {isAdmin && (
+          <>
+            <div className="my-4 border-t border-border" />
+            <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-accent-text">Owner</div>
+            <Link
+              href="/owner"
+              className="flex min-h-[40px] items-center gap-3 rounded-xl border border-accent/15 bg-accent-soft px-3 py-1.5 text-[13.5px] font-semibold text-accent-text transition hover:border-accent/30 hover:bg-accent/15"
+            >
+              <NavIcon name="settings" className="h-[16px] w-[16px]" />
+              Command Center
+            </Link>
+          </>
+        )}
       </nav>
 
       <div className="flex items-center justify-between border-t border-border px-2 pt-4">
@@ -53,6 +90,13 @@ export function Sidebar({ profile }: { profile: Profile }) {
       </form>
     </aside>
   );
+}
+
+function visibleItems(items: NavItem[], disabled: Set<string>) {
+  return items.filter((item) => {
+    const moduleKey = MODULE_BY_HREF[item.href];
+    return !moduleKey || !disabled.has(moduleKey);
+  });
 }
 
 function SidebarLink({ item, active, compact = false }: { item: NavItem; active: boolean; compact?: boolean }) {
