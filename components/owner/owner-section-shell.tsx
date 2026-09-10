@@ -50,7 +50,7 @@ export function OwnerSectionShell({
         <div className="mt-5 border-t border-[#172033] px-2 pt-4">
           <div className="rounded-xl border border-[#7248ff] bg-[linear-gradient(90deg,rgba(100,60,255,.32),rgba(121,75,255,.17))] px-3 py-2.5 text-[13px] font-semibold">♣ <span className="ml-2">Owner</span>⌄</div>
         </div>
-        <nav className="mt-2 space-y-1 px-2 text-[12px] text-[#b7bfd3]">
+        <nav aria-label="Owner navigation" className="mt-2 space-y-1 px-2 text-[12px] text-[#b7bfd3]">
           {ownerLinks.map((item) => <Nav key={item.key} href={item.href} icon={item.icon} label={item.label} active={active === item.key} />)}
         </nav>
         <div className="mt-auto p-3">
@@ -64,7 +64,7 @@ export function OwnerSectionShell({
         <header className="flex h-[65px] items-center gap-4 border-b border-[#172033] px-4 sm:px-5">
           <div className="flex h-9 max-w-[860px] flex-1 items-center rounded-lg border border-[#31405a] bg-[#0c1321] px-3 text-[12px] text-[#7f8aa3]">⌕&nbsp;&nbsp;Search owner tools, users, agents, logs...</div>
           <div className="ml-auto flex items-center gap-3">
-            <Link href="/owner/approvals" className="relative rounded-lg border border-[#6942d8] bg-[#160f2d] px-3 py-2 text-[10px] font-semibold text-[#d2c4ff] hover:border-[#8b5cf6]">
+            <Link aria-label={approvalCount > 0 ? `Open Approval Center, ${approvalCount} items need attention` : "Open Approval Center"} href="/owner/approvals" className="relative rounded-lg border border-[#6942d8] bg-[#160f2d] px-3 py-2 text-[10px] font-semibold text-[#d2c4ff] hover:border-[#8b5cf6]">
               ✓ Approvals{approvalCount > 0 ? <span className="ml-2 rounded-full bg-[#7c4dff] px-1.5 py-0.5 text-[8px] text-white">{approvalCount}</span> : null}
             </Link>
             <span className="hidden rounded-lg border border-[#263249] bg-[#0b111c] px-3 py-2 text-[11px] sm:inline"><span className="mr-2 text-emerald-400">●</span>Live</span>
