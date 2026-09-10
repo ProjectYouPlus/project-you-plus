@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/owner/access";
+import { assertDepartmentCanSpend } from "@/lib/ai/department-budget";
 
 const AGENT_KEYS = ["orchestrator", "builder", "qa", "backend", "design", "product"] as const;
 type AgentKey = (typeof AGENT_KEYS)[number];
@@ -15,17 +16,20 @@ function assertAgentKey(value: FormDataEntryValue | null): AgentKey {
 export async function queueAgentRun(formData: FormData) {
   const { supabase } = await requireAdmin();
   const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Unauthorized");
+  await assertDepartmentCanSpend(supabase, auth.user.id, "development", 1);
+
   const agentKey = assertAgentKey(formData.get("agent_key"));
   const title = String(formData.get("title") ?? "Manual agent run").slice(0, 160);
   const runType = String(formData.get("run_type") ?? "manual").slice(0, 80);
 
   const { error: runError } = await supabase.from("ai_agent_runs").insert({
     agent_key: agentKey,
-    requested_by: auth.user?.id ?? null,
+    requested_by: auth.user.id,
     run_type: runType,
     title,
     status: "queued",
-    metadata: { source: "owner_command_center" },
+    metadata: { source: "owner_command_center", department: "development" },
   });
   if (runError) throw runError;
 
@@ -41,6 +45,9 @@ export async function queueAgentRun(formData: FormData) {
 export async function queueFullAudit() {
   const { supabase } = await requireAdmin();
   const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Unauthorized");
+  await assertDepartmentCanSpend(supabase, auth.user.id, "development", 4);
+
   const now = new Date().toISOString();
   const jobs = [
     ["qa", "regression", "Run full product regression"],
@@ -52,11 +59,11 @@ export async function queueFullAudit() {
   const { error } = await supabase.from("ai_agent_runs").insert(
     jobs.map(([agent_key, run_type, title]) => ({
       agent_key,
-      requested_by: auth.user?.id ?? null,
+      requested_by: auth.user.id,
       run_type,
       title,
       status: "queued",
-      metadata: { source: "orchestrator", batch: now },
+      metadata: { source: "orchestrator", batch: now, department: "development" },
     }))
   );
   if (error) throw error;
