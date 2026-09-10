@@ -2,6 +2,23 @@
 
 This guide is intentionally ordered from free/no-cost setup to paid services.
 
+## 0. Supabase server secret — free and required for secure integrations
+
+Use the modern Supabase **Secret key** (`sb_secret_...`) when your project has one. Project You+ V10 reads `SUPABASE_SECRET_KEY` first and keeps `SUPABASE_SERVICE_ROLE_KEY` only as a legacy fallback.
+
+### Supabase
+1. Open the Project You+ Supabase project.
+2. Open **Settings → API Keys**.
+3. Under **Publishable and secret API keys**, copy or create the server-side Secret key.
+4. Do not put this key in GitHub, client code, or any `NEXT_PUBLIC_` variable.
+
+### Vercel
+Add the value to Preview and Production as:
+
+- `SUPABASE_SECRET_KEY`
+
+Redeploy after saving it.
+
 ## 1. Google Calendar — free
 
 Project You+ V10 uses Google Calendar read-only access first.
@@ -18,12 +35,12 @@ Project You+ V10 uses Google Calendar read-only access first.
 6. Copy the client ID and client secret.
 
 ### Vercel
-Add these server environment variables to Preview and Production:
+Add these environment variables to Preview and Production:
 
 - `GOOGLE_CALENDAR_CLIENT_ID`
 - `GOOGLE_CALENDAR_CLIENT_SECRET`
 - `NEXT_PUBLIC_SITE_URL=https://project-you-plus.vercel.app`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 
 Redeploy after saving them.
 
@@ -49,7 +66,7 @@ Add these to Preview and Production:
 - `PLAID_CLIENT_ID`
 - `PLAID_SECRET`
 - `PLAID_ENV=sandbox`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 
 Redeploy after saving them.
 
@@ -83,4 +100,4 @@ Do not fake Apple Calendar in the web app. Use EventKit when Project You+ moves 
 
 ## Security rules
 
-Never commit secrets to GitHub. Keep service-role, Plaid secret, Google client secret, and AI keys in Vercel server environment variables only.
+Never commit secrets to GitHub. Keep the Supabase server Secret key, Plaid secret, Google client secret, and AI keys in Vercel server environment variables only.
