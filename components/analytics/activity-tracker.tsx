@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 const PAGE_WINDOW_MS = 5 * 60 * 1000;
 
 export function ActivityTracker() {
+  return null;
+
   const pathname = usePathname();
   const lastPathRef = useRef<string | null>(null);
 
