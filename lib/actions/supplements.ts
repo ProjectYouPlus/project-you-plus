@@ -7,7 +7,7 @@ export async function addSupplement(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const dosage = String(formData.get("dosage") ?? "").trim() || null;
   const timing = String(formData.get("timing") ?? "morning");
-  const frequency = String(formData.get("frequency") ?? "daily");
+  const frequency = normalizeFrequency(String(formData.get("frequency") ?? "daily"), String(formData.get("weeklyDay") ?? "1"));
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!name) return { error: "Add the supplement name." };
 
@@ -17,9 +17,7 @@ export async function addSupplement(formData: FormData) {
 
   const { error } = await supabase.from("supplements").insert({ user_id: user.id, name, dosage, timing, frequency, notes, active: true });
   if (error) return { error: error.message };
-  revalidatePath("/supplements");
-  revalidatePath("/health");
-  revalidatePath("/dashboard");
+  revalidatePath("/supplements"); revalidatePath("/health"); revalidatePath("/dashboard");
   return { error: null };
 }
 
@@ -29,14 +27,17 @@ export async function logSupplementToday(supplementId: string) {
   if (!user) return;
   const loggedOn = new Date().toISOString().slice(0, 10);
   await supabase.from("supplement_logs").upsert({ user_id: user.id, supplement_id: supplementId, logged_on: loggedOn }, { onConflict: "user_id,supplement_id,logged_on" });
-  revalidatePath("/supplements");
-  revalidatePath("/dashboard");
+  revalidatePath("/supplements"); revalidatePath("/health"); revalidatePath("/dashboard");
 }
 
 export async function setSupplementActive(supplementId: string, active: boolean) {
   const supabase = await createClient();
   await supabase.from("supplements").update({ active }).eq("id", supplementId);
-  revalidatePath("/supplements");
-  revalidatePath("/health");
-  revalidatePath("/dashboard");
+  revalidatePath("/supplements"); revalidatePath("/health"); revalidatePath("/dashboard");
+}
+
+function normalizeFrequency(frequency:string, weeklyDay:string){
+  if(frequency!=="weekly") return frequency;
+  const day=Math.max(0,Math.min(6,Number(weeklyDay)||1));
+  return `weekly_${["sunday","monday","tuesday","wednesday","thursday","friday","saturday"][day]}`;
 }
