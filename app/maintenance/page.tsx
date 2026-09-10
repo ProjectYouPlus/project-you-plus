@@ -4,11 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function MaintenancePage() {
   const supabase = await createClient();
-  const { data: admin } = await supabase
-    .from("admin_users")
-    .select("role")
-    .eq("active", true)
-    .maybeSingle();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: admin } = user
+    ? await supabase
+        .from("admin_users")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("active", true)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg px-5 text-text-1">
