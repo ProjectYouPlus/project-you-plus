@@ -10,7 +10,6 @@ type RequestContext = {
   timezone: string | null;
   latitude: number | null;
   longitude: number | null;
-  ipAddress: string | null;
   userAgent: string | null;
   deviceFamily: string | null;
   browser: string | null;
@@ -44,7 +43,7 @@ export async function recordAuthEvent(
     timezone: locationEnabled ? context.timezone : null,
     latitude: locationEnabled ? context.latitude : null,
     longitude: locationEnabled ? context.longitude : null,
-    ip_address: locationEnabled ? context.ipAddress : null,
+    ip_address: null,
     user_agent: context.userAgent,
     device_family: context.deviceFamily,
     browser: context.browser,
@@ -67,17 +66,11 @@ async function getRequestContext(): Promise<RequestContext> {
     timezone: decodeHeader(requestHeaders.get("x-vercel-ip-timezone")),
     latitude: toNumber(requestHeaders.get("x-vercel-ip-latitude")),
     longitude: toNumber(requestHeaders.get("x-vercel-ip-longitude")),
-    ipAddress: firstForwardedIp(requestHeaders.get("x-forwarded-for")) ?? requestHeaders.get("x-real-ip"),
     userAgent,
     deviceFamily: parsed.deviceFamily,
     browser: parsed.browser,
     os: parsed.os,
   };
-}
-
-function firstForwardedIp(value: string | null) {
-  if (!value) return null;
-  return value.split(",")[0]?.trim() || null;
 }
 
 function decodeHeader(value: string | null) {
