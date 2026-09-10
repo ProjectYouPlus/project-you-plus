@@ -4,6 +4,8 @@ This guide is intentionally ordered from free/no-cost setup to paid services.
 
 ## 0. Supabase server secret — free and required for secure integrations
 
+Status: configured in Vercel for Preview and Production.
+
 Use the modern Supabase **Secret key** (`sb_secret_...`) when your project has one. Project You+ V10 reads `SUPABASE_SECRET_KEY` first and keeps `SUPABASE_SERVICE_ROLE_KEY` only as a legacy fallback.
 
 ### Supabase
@@ -21,18 +23,22 @@ Redeploy after saving it.
 
 ## 1. Google Calendar — free
 
+Status: Google Cloud project **Project You Plus** created; Calendar API enabled; OAuth branding/audience/data-access configured; web OAuth client created; credentials added to Vercel for Preview and Production. Next step is end-to-end OAuth connection testing.
+
 Project You+ V10 uses Google Calendar read-only access first.
 
 ### Google Cloud
-1. Create or select a Google Cloud project.
+1. Create or select the Google Cloud project **Project You Plus**.
 2. Enable the Google Calendar API.
 3. Open Google Auth Platform and configure the OAuth consent screen.
-4. Create an OAuth client with application type **Web application**.
-5. Add this Authorized redirect URI exactly:
+4. Keep Audience set to External / Testing while developing and add the developer Google account as a test user.
+5. Add the exact scope `https://www.googleapis.com/auth/calendar.readonly` under Data Access.
+6. Create an OAuth client with application type **Web application**.
+7. Add this Authorized redirect URI exactly:
 
    `https://project-you-plus.vercel.app/api/integrations/google-calendar/callback`
 
-6. Copy the client ID and client secret.
+8. Copy the client ID and client secret.
 
 ### Vercel
 Add these environment variables to Preview and Production:
@@ -45,7 +51,7 @@ Add these environment variables to Preview and Production:
 Redeploy after saving them.
 
 ### Test
-1. Sign in to Project You+.
+1. Sign in to Project You+ using the Google account listed as a Google OAuth test user.
 2. Open **You → Connections → Google Calendar**.
 3. Choose **Connect**.
 4. Approve the read-only Google Calendar permission.
