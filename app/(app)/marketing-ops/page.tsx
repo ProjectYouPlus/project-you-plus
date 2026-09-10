@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { GrowthDepartmentDashboard } from "@/components/marketing/growth-department-dashboard";
+import { DepartmentBudgetControl } from "@/components/marketing/department-budget-control";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -19,5 +20,12 @@ export default async function MarketingOpsPage() {
   const email = user.email?.toLowerCase();
   if (!email || !ownerEmails().includes(email)) redirect("/today");
 
-  return <GrowthDepartmentDashboard />;
+  return (
+    <>
+      <div className="mx-auto max-w-[1500px] px-4 pt-4 sm:px-6 lg:px-8">
+        <DepartmentBudgetControl />
+      </div>
+      <GrowthDepartmentDashboard />
+    </>
+  );
 }
