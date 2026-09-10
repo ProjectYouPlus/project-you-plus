@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: project-you-plus-qa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qa:
     runs-on: ubuntu-latest
@@ -21,7 +25,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+      - run: npm ci
       - run: npx playwright install --with-deps chromium webkit
       - name: Typecheck
         run: npm run typecheck
