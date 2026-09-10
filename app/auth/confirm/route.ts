@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { recordAuthEvent } from "@/lib/analytics/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -13,17 +14,17 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      await recordAuthEvent(supabase, "email_confirm", { authMethod: "email", path: "/auth/confirm" });
+      return NextResponse.redirect(`${origin}${next}`);
+    }
   }
 
   if (tokenHash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      type,
-      token_hash: tokenHash,
-    });
-
+    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
+      await recordAuthEvent(supabase, "email_confirm", { authMethod: type, path: "/auth/confirm" });
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
