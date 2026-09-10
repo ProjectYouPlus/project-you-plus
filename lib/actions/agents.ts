@@ -47,21 +47,14 @@ export async function queueAgentRun(formData: FormData) {
     .update({ status: "queued", last_run_at: now, updated_at: now })
     .eq("agent_key", agentKey);
 
-  await runAgentWithOpenAI({
-    supabase,
-    runId: Number(run.id),
-    agentKey,
-    title,
-    runType,
-  });
-
+  await runAgentWithOpenAI({ supabase, runId: Number(run.id), agentKey, title, runType });
   revalidatePath("/owner/agents");
 }
 
 export async function queueFullAudit() {
   const { supabase, user } = await requireAdmin();
   const now = new Date().toISOString();
-  const jobs: Array<{ agent_key: AgentKey; run_type: string; title: string }> = [
+  const auditJobs: Array<{ agent_key: AgentKey; run_type: string; title: string }> = [
     { agent_key: "qa", run_type: "regression", title: "Run full product regression risk review" },
     { agent_key: "backend", run_type: "security", title: "Review observable Supabase security and database health signals" },
     { agent_key: "design", run_type: "visual", title: "Review available UI and brand consistency evidence" },
@@ -71,53 +64,94 @@ export async function queueFullAudit() {
   const { data: enabledAgents } = await supabase
     .from("ai_agents")
     .select("agent_key,enabled,status")
-    .in("agent_key", jobs.map((job) => job.agent_key));
+    .in("agent_key", AGENT_KEYS);
 
   const allowed = new Set(
     (enabledAgents ?? [])
       .filter((agent) => agent.enabled && !["queued", "running"].includes(agent.status))
       .map((agent) => agent.agent_key as AgentKey)
   );
-  const runnableJobs = jobs.filter((job) => allowed.has(job.agent_key));
-  if (!runnableJobs.length) return;
 
-  const { data: runs, error } = await supabase
-    .from("ai_agent_runs")
-    .insert(
-      runnableJobs.map((job) => ({
-        agent_key: job.agent_key,
+  const runnableAuditJobs = auditJobs.filter((job) => allowed.has(job.agent_key));
+  if (runnableAuditJobs.length) {
+    const { data: runs, error } = await supabase
+      .from("ai_agent_runs")
+      .insert(
+        runnableAuditJobs.map((job) => ({
+          agent_key: job.agent_key,
+          requested_by: user.id,
+          run_type: job.run_type,
+          title: job.title,
+          status: "queued",
+          metadata: { source: "orchestrator", batch: now, phase: "audit" },
+        }))
+      )
+      .select("id,agent_key,run_type,title");
+    if (error) throw error;
+
+    await supabase
+      .from("ai_agents")
+      .update({ status: "queued", last_run_at: now, updated_at: now })
+      .in("agent_key", runnableAuditJobs.map((job) => job.agent_key));
+
+    await Promise.allSettled(
+      (runs ?? []).map((run) =>
+        runAgentWithOpenAI({
+          supabase,
+          runId: Number(run.id),
+          agentKey: run.agent_key as AgentKey,
+          title: run.title,
+          runType: run.run_type,
+        })
+      )
+    );
+  }
+
+  if (allowed.has("orchestrator")) {
+    const { data: run, error } = await supabase
+      .from("ai_agent_runs")
+      .insert({
+        agent_key: "orchestrator",
         requested_by: user.id,
-        run_type: job.run_type,
-        title: job.title,
+        run_type: "orchestrate",
+        title: "Prioritize the latest Project You+ audit findings and next actions",
         status: "queued",
-        metadata: { source: "orchestrator", batch: now },
-      }))
-    )
-    .select("id,agent_key,run_type,title");
-  if (error) throw error;
-
-  await supabase
-    .from("ai_agents")
-    .update({ status: "queued", last_run_at: now, updated_at: now })
-    .in("agent_key", runnableJobs.map((job) => job.agent_key));
-
-  await Promise.allSettled(
-    (runs ?? []).map((run) =>
-      runAgentWithOpenAI({
-        supabase,
-        runId: Number(run.id),
-        agentKey: run.agent_key as AgentKey,
-        title: run.title,
-        runType: run.run_type,
+        metadata: { source: "owner_command_center", batch: now, phase: "prioritize" },
       })
-    )
-  );
+      .select("id")
+      .single();
+    if (error) throw error;
+    await runAgentWithOpenAI({
+      supabase,
+      runId: Number(run.id),
+      agentKey: "orchestrator",
+      title: "Prioritize the latest Project You+ audit findings and next actions",
+      runType: "orchestrate",
+    });
+  }
 
-  const finishedAt = new Date().toISOString();
-  await supabase
-    .from("ai_agents")
-    .update({ status: "idle", last_success_at: finishedAt, last_error: null, updated_at: finishedAt })
-    .eq("agent_key", "orchestrator");
+  if (allowed.has("builder")) {
+    const { data: run, error } = await supabase
+      .from("ai_agent_runs")
+      .insert({
+        agent_key: "builder",
+        requested_by: user.id,
+        run_type: "implementation_plan",
+        title: "Turn the latest prioritized findings into a concrete engineering plan",
+        status: "queued",
+        metadata: { source: "orchestrator", batch: now, phase: "implementation_plan" },
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    await runAgentWithOpenAI({
+      supabase,
+      runId: Number(run.id),
+      agentKey: "builder",
+      title: "Turn the latest prioritized findings into a concrete engineering plan",
+      runType: "implementation_plan",
+    });
+  }
 
   revalidatePath("/owner/agents");
 }
