@@ -10,7 +10,7 @@ function ownerEmails() {
     .filter(Boolean);
 }
 
-async function requireOwner() {
+async function getOwnerContext() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,11 +18,14 @@ async function requireOwner() {
 
   const allowlist = ownerEmails();
   const email = user?.email?.toLowerCase();
-  return Boolean(user && email && allowlist.length > 0 && allowlist.includes(email));
+  const authorized = Boolean(user && email && allowlist.length > 0 && allowlist.includes(email));
+
+  return { supabase, user, authorized };
 }
 
 export async function POST(request: Request) {
-  if (!(await requireOwner())) {
+  const { supabase, user, authorized } = await getOwnerContext();
+  if (!authorized || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -60,12 +63,27 @@ export async function POST(request: Request) {
       reasoningEffort: agentId === "orchestrator" || agentId === "strategy" || agentId === "analytics" ? "medium" : "low",
     });
 
+    const { error: insertError } = await supabase.from("marketing_agent_runs").insert({
+      owner_id: user.id,
+      agent_id: agentId,
+      status: "review",
+      objective: body.objective || null,
+      context: body.context || null,
+      output,
+      metadata: { agent_name: agent.name, role: agent.role },
+    });
+
+    if (insertError) {
+      console.warn("Marketing agent run was generated but not persisted", insertError.message);
+    }
+
     return NextResponse.json({
       agentId,
       agentName: agent.name,
       role: agent.role,
       output,
       generatedAt: new Date().toISOString(),
+      persisted: !insertError,
     });
   } catch (error) {
     console.error("Marketing agent run failed", error);
