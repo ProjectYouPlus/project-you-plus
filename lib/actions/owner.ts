@@ -37,6 +37,7 @@ export async function updateModuleControl(formData: FormData) {
     updated_at: new Date().toISOString(),
   }).eq("module_key", moduleKey);
   revalidatePath("/owner");
+  revalidatePath("/owner/controls");
 }
 
 export async function updateBooleanSetting(formData: FormData) {
@@ -46,4 +47,5 @@ export async function updateBooleanSetting(formData: FormData) {
   const { supabase, user } = await requireAdminAction();
   await supabase.from("app_settings").update({ value, updated_by: user.id, updated_at: new Date().toISOString() }).eq("setting_key", settingKey);
   revalidatePath("/owner");
+  revalidatePath("/owner/settings");
 }
