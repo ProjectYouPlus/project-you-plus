@@ -18,15 +18,16 @@ export async function addWorkout(formData: FormData) {
   if (!user) return { error: "Sign in again." };
   const { error } = await supabase.from("workouts").insert({ user_id: user.id, title, type, duration_minutes: duration, source: "manual" });
   if (error) return { error: error.message };
-  revalidatePath("/fitness");
-  revalidatePath("/health");
-  revalidatePath("/dashboard");
+  revalidatePath("/fitness"); revalidatePath("/health"); revalidatePath("/dashboard");
   return { error: null };
 }
 
 export async function generateWorkoutPlan(formData: FormData) {
   const goal = String(formData.get("goal") ?? "Build strength and improve body composition").trim();
-  const days = Math.max(1, Math.min(6, Number(formData.get("days") ?? 4)));
+  const requestedDays = formData.getAll("trainingDays").map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6);
+  const fallbackDaysCount = Math.max(1, Math.min(6, Number(formData.get("days") ?? 4)));
+  const selectedDays = requestedDays.length ? [...new Set(requestedDays)].sort((a,b)=>a-b) : daySlots(fallbackDaysCount);
+  const days = selectedDays.length;
   const minutes = Math.max(25, Math.min(90, Number(formData.get("minutes") ?? 50)));
   const experience = String(formData.get("experience") ?? "intermediate");
 
@@ -34,46 +35,30 @@ export async function generateWorkoutPlan(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in again." };
 
-  let schedule = fallbackPlan(goal, days, minutes);
+  let schedule = fallbackPlan(goal, selectedDays, minutes);
   let planTitle = `${days}-Day ${titleCase(goal)} Plan`;
   let source = "project_you_fallback";
 
   if (hasCloudAI()) {
     try {
       const result = await callProjectYouAI({
-        system: "You are the Project You+ training planner. Build practical general-fitness plans for healthy adults from the user's stated goal, experience, training frequency, and available session time. Avoid medical claims, max-effort testing, extreme volume, or pretending to know injuries/equipment not provided. Return valid JSON only, without markdown.",
-        messages: [{ role: "user", content: `Create a ${days}-day-per-week workout plan for a ${experience} user. Goal: ${goal}. Session length: about ${minutes} minutes. Return exactly {"title":"...","schedule":[{"key":"day-1","day":"Monday","dayIndex":1,"title":"...","focus":"...","duration":${minutes},"exercises":[{"name":"...","sets":"3","reps":"8-10","rest":"90 sec"}]}]}. Use dayIndex 0=Sunday through 6=Saturday. Include 4-7 exercises per session, distribute recovery sensibly, and return exactly ${days} sessions.` }],
+        system: "You are the Project You+ training planner. Build practical general-fitness plans for healthy adults from the user's stated goal, experience, exact available training days, and session time. Avoid medical claims, max-effort testing, extreme volume, or pretending to know injuries/equipment not provided. Return valid JSON only, without markdown.",
+        messages: [{ role: "user", content: `Create a workout plan for a ${experience} user. Goal: ${goal}. Session length: about ${minutes} minutes. The user trains ONLY on these days: ${selectedDays.map(dayName).join(", ")}. Return exactly {"title":"...","schedule":[{"key":"day-1","day":"Monday","dayIndex":1,"title":"...","focus":"...","duration":${minutes},"exercises":[{"name":"...","sets":"3","reps":"8-10","rest":"90 sec"}]}]}. Use dayIndex 0=Sunday through 6=Saturday. Include 4-7 exercises per session, distribute recovery sensibly, and return exactly ${days} sessions matching those exact weekdays.` }],
         maxTokens: 1900,
       });
       const parsed = JSON.parse(result.text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim()) as { title?: string; schedule?: PlanSession[] };
       if (Array.isArray(parsed.schedule) && parsed.schedule.length === days) {
-        schedule = parsed.schedule.map((session, index) => normalizeSession(session, index, minutes));
+        schedule = parsed.schedule.map((session, index) => normalizeSession(session, index, minutes, selectedDays));
         planTitle = String(parsed.title || planTitle).slice(0, 120);
         source = result.provider;
       }
-    } catch (error) {
-      console.error("Workout plan cloud AI fallback:", error);
-    }
+    } catch (error) { console.error("Workout plan cloud AI fallback:", error); }
   }
 
   await supabase.from("workout_plans").update({ active: false }).eq("user_id", user.id).eq("active", true);
-  const { error } = await supabase.from("workout_plans").insert({
-    user_id: user.id,
-    title: planTitle,
-    goal,
-    days_per_week: days,
-    session_minutes: minutes,
-    experience,
-    schedule,
-    active: true,
-    source,
-  });
+  const { error } = await supabase.from("workout_plans").insert({ user_id: user.id, title: planTitle, goal, days_per_week: days, session_minutes: minutes, experience, schedule, active: true, source });
   if (error) return { error: error.message };
-
-  revalidatePath("/fitness");
-  revalidatePath("/health");
-  revalidatePath("/dashboard");
-  revalidatePath("/coach");
+  revalidatePath("/fitness"); revalidatePath("/health"); revalidatePath("/dashboard"); revalidatePath("/coach");
   return { error: null };
 }
 
@@ -89,45 +74,20 @@ export async function completeWorkoutPlanSession(planId: string, sessionKey: str
     const session = Array.isArray(plan?.schedule) ? (plan.schedule as PlanSession[]).find((item) => item.key === sessionKey) : null;
     await supabase.from("workouts").insert({ user_id: user.id, title: session?.title ?? "Planned workout", type: "strength", duration_minutes: durationMinutes, source: "plan" });
   }
-  revalidatePath("/fitness");
-  revalidatePath("/health");
-  revalidatePath("/dashboard");
-  revalidatePath("/review");
+  revalidatePath("/fitness"); revalidatePath("/health"); revalidatePath("/dashboard"); revalidatePath("/review");
 }
 
-function normalizeSession(session: PlanSession, index: number, minutes: number): PlanSession {
-  const fallbackDays = daySlots(Math.max(1, index + 1));
-  const dayIndex = Number.isInteger(session.dayIndex) && session.dayIndex >= 0 && session.dayIndex <= 6 ? session.dayIndex : fallbackDays[Math.min(index, fallbackDays.length - 1)];
-  return {
-    key: session.key || `session-${index + 1}`,
-    day: session.day || dayName(dayIndex),
-    dayIndex,
-    title: session.title || `Training Session ${index + 1}`,
-    focus: session.focus || "Strength and movement quality",
-    duration: Number(session.duration) || minutes,
-    exercises: Array.isArray(session.exercises) ? session.exercises.slice(0, 8).map((exercise) => ({ name: String(exercise.name || "Exercise"), sets: String(exercise.sets || "3"), reps: String(exercise.reps || "8-12"), rest: String(exercise.rest || "60-90 sec") })) : [],
-  };
+function normalizeSession(session: PlanSession, index: number, minutes: number, selectedDays:number[]): PlanSession {
+  const dayIndex = selectedDays[index] ?? 1;
+  return { key: session.key || `session-${index + 1}`, day: dayName(dayIndex), dayIndex, title: session.title || `Training Session ${index + 1}`, focus: session.focus || "Strength and movement quality", duration: Number(session.duration) || minutes, exercises: Array.isArray(session.exercises) ? session.exercises.slice(0, 8).map((exercise) => ({ name: String(exercise.name || "Exercise"), sets: String(exercise.sets || "3"), reps: String(exercise.reps || "8-12"), rest: String(exercise.rest || "60-90 sec") })) : [] };
 }
 
-function fallbackPlan(goal: string, days: number, minutes: number): PlanSession[] {
-  const slots = daySlots(days);
-  const templates: Array<{ title: string; focus: string; exercises: Exercise[] }> = days <= 2
-    ? [fullBody("A"), fullBody("B")]
-    : days === 3
-      ? [push(), pull(), legs()]
-      : days === 4
-        ? [upper("A"), lower("A"), upper("B"), lower("B")]
-        : [push(), pull(), legs(), upper("Power"), lower("Athletic"), fullBody("Conditioning")];
-  return slots.map((dayIndex, index) => {
-    const template = templates[index % templates.length];
-    return { key: `day-${index + 1}`, day: dayName(dayIndex), dayIndex, title: template.title, focus: `${template.focus} · ${goal}`, duration: minutes, exercises: template.exercises };
-  });
+function fallbackPlan(goal: string, selectedDays:number[], minutes: number): PlanSession[] {
+  const days=selectedDays.length;
+  const templates = days <= 2 ? [fullBody("A"), fullBody("B")] : days === 3 ? [push(), pull(), legs()] : days === 4 ? [upper("A"), lower("A"), upper("B"), lower("B")] : [push(), pull(), legs(), upper("Power"), lower("Athletic"), fullBody("Conditioning")];
+  return selectedDays.map((dayIndex, index) => { const template = templates[index % templates.length]; return { key: `day-${index + 1}`, day: dayName(dayIndex), dayIndex, title: template.title, focus: `${template.focus} · ${goal}`, duration: minutes, exercises: template.exercises }; });
 }
-
-function daySlots(days: number) {
-  const map: Record<number, number[]> = { 1: [2], 2: [2, 5], 3: [1, 3, 5], 4: [1, 2, 4, 6], 5: [1, 2, 3, 5, 6], 6: [1, 2, 3, 4, 5, 6] };
-  return map[days] ?? map[4];
-}
+function daySlots(days: number) { const map: Record<number, number[]> = { 1: [2], 2: [2, 5], 3: [1, 3, 5], 4: [1, 2, 4, 6], 5: [1, 2, 3, 5, 6], 6: [1, 2, 3, 4, 5, 6] }; return map[days] ?? map[4]; }
 function dayName(index: number) { return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][index]; }
 function ex(name: string, sets = "3", reps = "8-12", rest = "75 sec"): Exercise { return { name, sets, reps, rest }; }
 function fullBody(label: string) { return { title: `Full Body ${label}`, focus: "Total-body strength", exercises: [ex("Squat pattern", "3", "6-10"), ex("Horizontal press"), ex("Row"), ex("Hip hinge", "3", "8-10"), ex("Vertical pull", "3", "8-12"), ex("Loaded carry", "3", "30-45 sec")] }; }
