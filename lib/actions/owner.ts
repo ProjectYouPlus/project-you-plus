@@ -32,7 +32,7 @@ async function requireAdminAction() {
 
 export async function updateModuleControl(formData: FormData) {
   const moduleKey = String(formData.get("moduleKey") ?? "").trim();
-  const enabled = String(formData.get("enabled")) === "true";
+  const intent = String(formData.get("intent") ?? "rollout");
   const rollout = Math.max(0, Math.min(100, Number(formData.get("rollout") ?? 100)));
 
   if (!moduleKey || !Number.isFinite(rollout)) return;
@@ -40,17 +40,20 @@ export async function updateModuleControl(formData: FormData) {
   const { supabase, user } = await requireAdminAction();
   const { data: module } = await supabase
     .from("app_modules")
-    .select("locked")
+    .select("locked,enabled,rollout_percent")
     .eq("module_key", moduleKey)
     .maybeSingle();
 
   if (!module || module.locked) return;
 
+  const enabled = intent === "toggle" ? !module.enabled : module.enabled;
+  const nextRollout = intent === "rollout" ? Math.round(rollout) : module.rollout_percent;
+
   await supabase
     .from("app_modules")
     .update({
       enabled,
-      rollout_percent: Math.round(rollout),
+      rollout_percent: nextRollout,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     })
