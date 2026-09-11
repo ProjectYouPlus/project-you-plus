@@ -18,18 +18,14 @@ drop policy if exists challenge_invites_update on public.challenge_invites;
 create policy challenge_invites_update on public.challenge_invites for update using (auth.uid() = invitee_id) with check (auth.uid() = invitee_id);
 drop policy if exists challenge_invites_delete on public.challenge_invites;
 create policy challenge_invites_delete on public.challenge_invites for delete using (auth.uid() in (inviter_id, invitee_id));
-
 create or replace function public.has_challenge_invite(p_challenge_id uuid)
 returns boolean
 language sql
 stable
 security definer
 set search_path = public
-as $$
-  select exists(select 1 from public.challenge_invites ci where ci.challenge_id = p_challenge_id and ci.invitee_id = auth.uid() and ci.status = 'pending');
-$$;
+as $$ select exists(select 1 from public.challenge_invites ci where ci.challenge_id = p_challenge_id and ci.invitee_id = auth.uid() and ci.status = 'pending'); $$;
 revoke all on function public.has_challenge_invite(uuid) from public;
 grant execute on function public.has_challenge_invite(uuid) to authenticated;
-
 drop policy if exists challenges_read on public.challenges;
 create policy challenges_read on public.challenges for select using (creator_id = auth.uid() or public.is_challenge_member(id) or public.has_challenge_invite(id));

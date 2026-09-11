@@ -1,10 +1,11 @@
+import { cache } from "react";
 import { isDemoMode } from "@/lib/demo-mode";
 import { mockProfile } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { redirect } from "next/navigation";
 
-export async function getProfile(): Promise<Profile> {
+export const getProfile = cache(async (): Promise<Profile> => {
   if (isDemoMode) return mockProfile;
 
   const supabase = await createClient();
@@ -19,9 +20,10 @@ export async function getProfile(): Promise<Profile> {
 
   return {
     id: data.id,
+    createdAt: data.created_at,
     fullName: data.full_name,
     timezone: data.timezone,
     onboardingCompleted: data.onboarding_completed,
     blueprint: data.blueprint,
   };
-}
+});

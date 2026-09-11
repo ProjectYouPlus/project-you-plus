@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { setRecommendationDecision } from "@/lib/ai/recommendations";
+import { updateRecommendationState } from "@/lib/ai/recommendations";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-    const recommendation = await setRecommendationDecision(supabase, user.id, params.id, body.decision);
+    const recommendation = await updateRecommendationState(params.id, body.decision);
     if (!recommendation) return NextResponse.json({ error: "Recommendation is no longer pending." }, { status: 404 });
 
     // Accepted means the user approved the recommendation. Execution is intentionally separate:

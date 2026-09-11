@@ -23,44 +23,25 @@ begin
 end;
 $$;
 revoke all on function public.award_active_challenges(uuid,text,integer) from public;
-
 create or replace function public.challenge_score_habit_log()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
+returns trigger language plpgsql security definer set search_path = public
 as $$ begin perform public.award_active_challenges(new.user_id, 'habit', 1); return new; end; $$;
-
 create or replace function public.challenge_score_workout_plan_log()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
+returns trigger language plpgsql security definer set search_path = public
 as $$ begin perform public.award_active_challenges(new.user_id, 'workout', 1); return new; end; $$;
-
 create or replace function public.challenge_score_manual_workout()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
+returns trigger language plpgsql security definer set search_path = public
 as $$ begin if coalesce(new.source,'manual') <> 'plan' then perform public.award_active_challenges(new.user_id, 'workout', 1); end if; return new; end; $$;
-
 create or replace function public.challenge_score_task_completion()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
+returns trigger language plpgsql security definer set search_path = public
 as $$
 begin
-  if old.completed_at is null and new.completed_at is not null then
-    perform public.award_active_challenges(new.user_id, 'task', 1);
-  elsif old.completed_at is not null and new.completed_at is null then
-    perform public.award_active_challenges(new.user_id, 'task', -1);
+  if old.completed_at is null and new.completed_at is not null then perform public.award_active_challenges(new.user_id, 'task', 1);
+  elsif old.completed_at is not null and new.completed_at is null then perform public.award_active_challenges(new.user_id, 'task', -1);
   end if;
   return new;
 end;
 $$;
-
 drop trigger if exists challenge_habit_log_trigger on public.habit_logs;
 create trigger challenge_habit_log_trigger after insert on public.habit_logs for each row execute function public.challenge_score_habit_log();
 drop trigger if exists challenge_workout_plan_log_trigger on public.workout_plan_logs;

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { buildUnifiedUserContext, compactUnifiedUserContext } from "@/lib/ai/unified-context";
-import { orchestrateCoachRequest } from "@/lib/ai/user-orchestrator";
-import { callProjectYouAI, hasCloudAI } from "@/lib/ai/provider";
-import { PROJECT_YOU_SYSTEM } from "@/lib/ai/prompts";
+import { buildProjectYouContext } from "@/lib/ai/context";
+import { orchestrateCoach } from "@/lib/ai/orchestrator";
 import { fallbackCoachReply } from "@/lib/ai/fallbacks";
+import { evaluateProgression } from "@/lib/progression/service";
 
 export const runtime = "nodejs";
 
@@ -14,31 +13,22 @@ export async function POST(request: Request) {
       history?: Array<{ role: "user" | "assistant"; content: string }>;
       coachMode?: "decide" | "plan" | "reflect";
     };
-    const message = body.message?.trim();
+    const message = body.message?.trim().slice(0, 4000);
     if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
-    const unified = await buildUnifiedUserContext();
-    const context = unified.current;
-    const orchestration = orchestrateCoachRequest(message, context);
-    const history = (body.history ?? []).slice(-12).filter((item) => item.role === "user" || item.role === "assistant");
-
-    if (!hasCloudAI()) {
-      return NextResponse.json({ reply: fallbackCoachReply(message, context), mode: "local" });
-    }
+    const context = await buildProjectYouContext();
+    try {
+      const progression=await evaluateProgression(context);
+      const progressionData=context.domains.progression.data??{activeGoals:[],state:null};
+      context.domains.progression={...context.domains.progression,availability:"available",reason:null,data:{...progressionData,state:{stage:progression.stage,currentScore:progression.currentScore,highestScore:progression.highestScore,coveragePct:progression.coveragePct,sustainedHighDays:progression.sustainedHighDays,onePercentUnlocked:progression.onePercentUnlocked}}};
+      const achievementData=context.domains.achievements.data??{completedChallenges:[],unlocked:[]};
+      context.domains.achievements={...context.domains.achievements,availability:"available",reason:null,data:{...achievementData,unlocked:progression.achievements.map(item=>({id:item.id,key:item.key,title:item.title,category:item.category,unlockedAt:item.unlockedAt}))}};
+    } catch (error) { console.error("Progression evaluation failed:", error); }
+    const history = (body.history ?? []).slice(-12).filter((item) => (item.role === "user" || item.role === "assistant") && typeof item.content === "string").map((item) => ({ role: item.role, content: item.content.slice(0, 4000) }));
 
     try {
-      const modeInstruction = body.coachMode === "plan"
-        ? "Prefer concrete sequencing, scheduling, and time-block recommendations."
-        : body.coachMode === "reflect"
-          ? "Prefer pattern recognition, concise interpretation, and one learning to carry forward."
-          : "Prefer one clear decision and the next best action.";
-
-      const result = await callProjectYouAI({
-        system: `${PROJECT_YOU_SYSTEM}\n\nAUTHORITATIVE UNIFIED PROJECT YOU+ USER CONTEXT:\n${JSON.stringify(compactUnifiedUserContext(unified), null, 2)}\n\nINTERNAL SPECIALIST ORCHESTRATION:\n${orchestration.instructions}\n\nCURRENT COACHING MODE: ${body.coachMode ?? "decide"}. ${modeInstruction}\n\nBehave like one continuous personal operating-system intelligence. Connect domains when the context supports it, but never invent data that is not connected.`,
-        messages: [...history, { role: "user", content: message }],
-        maxTokens: 900,
-      });
-      return NextResponse.json({ reply: result.text, mode: result.provider });
+      const result = await orchestrateCoach({ message, history, mode: body.coachMode ?? "decide", context });
+      return NextResponse.json({ reply: result.reply, mode: result.provider, recommendations: result.recommendations.map(item=>({id:item.id,domain:item.domain,observation:item.observation,suggestedAction:item.suggestedAction,expectedImpact:item.expectedImpact,confidence:item.confidence,state:item.state,actionType:item.actionType})) });
     } catch (error) {
       console.error("Cloud coach fallback:", error);
       return NextResponse.json({ reply: fallbackCoachReply(message, context), mode: "local-fallback" });

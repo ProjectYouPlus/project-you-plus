@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
-import { recordUserEvent } from "@/lib/ai/user-events";
 import type { Tier } from "@/lib/types";
 
 export async function createTask(formData: FormData) {
@@ -41,13 +40,7 @@ export async function toggleTaskComplete(taskId: string, completed: boolean) {
   if (!user) return;
   const completedAt = completed ? new Date().toISOString() : null;
   const { error } = await supabase.from("tasks").update({ completed_at: completedAt }).eq("id", taskId).eq("user_id", user.id);
-  if (!error && completed) {
-    try {
-      await recordUserEvent(supabase, { userId: user.id, eventName: "task.completed", domain: "planner", entityType: "task", entityId: taskId, occurredAt: completedAt ?? undefined });
-    } catch (eventError) {
-      console.error("Task intelligence event skipped:", eventError);
-    }
-  }
+  if (error) throw new Error(error.message);
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
   revalidatePath("/review");

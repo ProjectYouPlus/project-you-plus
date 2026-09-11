@@ -2,7 +2,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
-import { recordUserEvent } from "@/lib/ai/user-events";
 
 export async function createHabit(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
@@ -28,13 +27,7 @@ export async function logHabitToday(habitId: string) {
   if (!user) return;
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await supabase.from("habit_logs").upsert({ habit_id: habitId, user_id: user.id, logged_at: today }, { onConflict: "habit_id,logged_at" });
-  if (!error) {
-    try {
-      await recordUserEvent(supabase, { userId: user.id, eventName: "habit.completed", domain: "planner", entityType: "habit", entityId: habitId, metadata: { loggedOn: today } });
-    } catch (eventError) {
-      console.error("Habit intelligence event skipped:", eventError);
-    }
-  }
+  if (error) throw new Error(error.message);
   revalidatePath("/habits");
   revalidatePath("/dashboard");
   revalidatePath("/review");

@@ -42,22 +42,22 @@ export function calculateOnePercentScore({
   const sleepHabit = habits.find((habit) => /sleep/i.test(habit.title));
   const learningHabit = habits.find((habit) => /read|learn|study/i.test(habit.title));
 
-  if (health.sleepMinutes > 0 || sleepHabit) {
-    const sleepDurationPct = health.sleepMinutes > 0
-      ? clamp((health.sleepMinutes / Math.max(1, health.sleepTargetMinutes)) * 100)
+  if (((health.sleepMinutes ?? 0) > 0 && (health.sleepTargetMinutes ?? 0) > 0) || sleepHabit) {
+    const sleepDurationPct = (health.sleepMinutes ?? 0) > 0 && (health.sleepTargetMinutes ?? 0) > 0
+      ? clamp(((health.sleepMinutes ?? 0) / Math.max(1, health.sleepTargetMinutes ?? 0)) * 100)
       : null;
     const parts = [sleepDurationPct, sleepHabit?.consistencyPct ?? null].filter((value): value is number => value != null);
     const sleep = clamp(parts.reduce((sum, value) => sum + value, 0) / parts.length);
-    add("sleep", sleep, 0.15, health.sleepMinutes > 0
-      ? `${Math.floor(health.sleepMinutes / 60)}h ${health.sleepMinutes % 60}m versus a ${Math.round(health.sleepTargetMinutes / 60)}h target${sleepHabit ? " plus sleep consistency" : ""}.`
+    add("sleep", sleep, 0.15, sleepDurationPct !== null
+      ? `${Math.floor((health.sleepMinutes ?? 0) / 60)}h ${(health.sleepMinutes ?? 0) % 60}m versus a ${Math.round((health.sleepTargetMinutes ?? 0) / 60)}h target${sleepHabit ? " plus sleep consistency" : ""}.`
       : `${sleepHabit?.consistencyPct ?? 0}% consistency on ${sleepHabit?.title ?? "sleep"}.`);
   }
 
-  const hasFitnessSignal = Boolean(workoutHabit) || health.recoveryPct > 0 || health.workoutStatus === "completed" || health.workoutStatus === "scheduled";
+  const hasFitnessSignal = Boolean(workoutHabit) || (health.recoveryPct ?? 0) > 0 || health.workoutStatus === "completed" || health.workoutStatus === "scheduled";
   if (hasFitnessSignal) {
     const parts: number[] = [];
     if (workoutHabit) parts.push(workoutHabit.consistencyPct);
-    if (health.recoveryPct > 0) parts.push(health.recoveryPct);
+    if ((health.recoveryPct ?? 0) > 0) parts.push(health.recoveryPct ?? 0);
     if (health.workoutStatus === "completed") parts.push(100);
     else if (health.workoutStatus === "scheduled") parts.push(70);
     const fitness = clamp(parts.reduce((sum, value) => sum + value, 0) / Math.max(1, parts.length));

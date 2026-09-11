@@ -14,11 +14,9 @@ as $$
 $$;
 revoke all on function public.is_accountability_connection(uuid) from public;
 grant execute on function public.is_accountability_connection(uuid) to authenticated;
-
 drop policy if exists social_profiles_discoverable_read on public.social_profiles;
 create policy social_profiles_discoverable_read on public.social_profiles for select
 using (discoverable = true or auth.uid() = user_id or public.is_accountability_connection(user_id));
-
 create table if not exists public.investment_holdings (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references auth.users(id) on delete cascade,

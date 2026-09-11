@@ -1,5 +1,3 @@
--- Project You+ user intelligence core: longitudinal events, recommendations, score history, and progression.
-
 create table if not exists public.user_intelligence_events (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references auth.users(id) on delete cascade,

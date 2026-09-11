@@ -14,6 +14,6 @@ export async function addHealthMetric(formData: FormData) {
   if (!user) return { error: "Sign in again to save health data." };
   const { error } = await supabase.from("health_metrics").insert({ user_id: user.id, metric_type: metricType, value, source: "manual" });
   if (error) return { error: error.message };
-  revalidatePath("/health"); revalidatePath("/today"); revalidatePath("/you");
+  revalidatePath("/dashboard"); revalidatePath("/coach"); revalidatePath("/health"); revalidatePath("/today"); revalidatePath("/you");
   return { error: null };
 }

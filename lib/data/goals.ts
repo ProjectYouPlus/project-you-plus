@@ -8,7 +8,8 @@ export async function getGoals(): Promise<Goal[]> {
 
   const supabase = await createClient();
   const { data, error } = await supabase.from("goals").select("*").order("created_at", { ascending: false });
-  if (error || !data) return [];
+  if (error) throw new Error(`Could not load goals: ${error.message}`);
+  if (!data) return [];
 
   return data.map((row) => ({
     id: row.id,

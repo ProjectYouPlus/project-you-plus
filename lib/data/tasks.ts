@@ -20,7 +20,8 @@ export async function getTasks(): Promise<Task[]> {
 
   const supabase = await createClient();
   const { data, error } = await supabase.from("tasks").select("*").order("due_at", { ascending: true, nullsFirst: false });
-  if (error || !data) return [];
+  if (error) throw new Error(`Could not load tasks: ${error.message}`);
+  if (!data) return [];
 
   return data.map((row) => ({
     id: row.id,

@@ -14,6 +14,8 @@ export function isClaudeConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+export function claudeModel() { return process.env.ANTHROPIC_MODEL || "claude-sonnet-5"; }
+
 export async function callClaude({ system, messages, maxTokens = 700, temperature = 0.3 }: ClaudeRequest): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -26,7 +28,7 @@ export async function callClaude({ system, messages, maxTokens = 700, temperatur
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
+      model: claudeModel(),
       max_tokens: maxTokens,
       temperature,
       system,
