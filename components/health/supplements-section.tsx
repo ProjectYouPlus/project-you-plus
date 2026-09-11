@@ -63,7 +63,6 @@ function SupplementRow({
         ? item.frequency.slice(5).split(",").map(Number)
         : [],
     ),
-    [time, setTime] = useState(reminder?.time_of_day?.slice(0, 5) ?? ""),
     [enabled, setEnabled] = useState(reminder?.enabled ?? false);
   return (
     <div className="py-4">
@@ -168,8 +167,7 @@ function SupplementRow({
               aria-label={`Reminder time for ${item.name}`}
               ref={timeRef}
               type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
+              defaultValue={reminder?.time_of_day?.slice(0, 5) ?? ""}
               className="py-input mt-1"
             />
           </label>
@@ -182,7 +180,7 @@ function SupplementRow({
           action={() =>
             saveSupplementReminder(
               item.id,
-              timeRef.current?.value ?? time,
+              timeRef.current?.value ?? "",
               enabled,
             )
           }
