@@ -2,9 +2,10 @@ import { CoachChat } from "@/components/coach/coach-chat";
 import { getGoals } from "@/lib/data/goals";
 import { getTasks } from "@/lib/data/tasks";
 import { getHabits } from "@/lib/data/habits";
+import { getRecentCoachMessages } from "@/lib/coach/conversation";
 
 export default async function CoachPage() {
-  const [goals,tasks,habits]=await Promise.all([getGoals(),getTasks(),getHabits()]);
+  const [goals,tasks,habits,conversation]=await Promise.all([getGoals(),getTasks(),getHabits(),getRecentCoachMessages().catch(()=>[])]);
   const activeGoals=goals.filter(g=>g.status==="active");
   const openTasks=tasks.filter(t=>!t.completedAt);
   const linkedTasks=openTasks.filter(t=>t.goalId).length;
@@ -12,9 +13,10 @@ export default async function CoachPage() {
   const contextReady=activeGoals.length+tasks.length+habits.length>0;
   const signal=!activeGoals.length?"Start with one real goal. Without a destination, coaching can only be generic.":!openTasks.length?`Your clearest move is to give “${activeGoals[0].title}” one concrete next action.`:linkedTasks<openTasks.length?`${openTasks.length-linkedTasks} open action${openTasks.length-linkedTasks===1?" is":"s are"} not linked to a goal. Clean that up before adding more work.`:habits.length>0&&linkedHabits===0?"Your tasks have direction, but your habits do not yet support a goal. Link one repeatable behavior to an outcome.":`Your system has ${activeGoals.length} active goal${activeGoals.length===1?"":"s"}, ${openTasks.length} open action${openTasks.length===1?"":"s"}, and ${habits.length} habit${habits.length===1?"":"s"}. Ask me where the leverage is.`;
   const summary=contextReady?`${activeGoals.length} active goal${activeGoals.length===1?"":"s"}, ${openTasks.length} open action${openTasks.length===1?"":"s"}, ${habits.length} habit${habits.length===1?"":"s"}.`:"Your account is still mostly empty. I’ll help you build the system before pretending there is enough data to analyze.";
+  const prompts=[openTasks.length?"What should I focus on today?":null,activeGoals.length?"What is keeping me from reaching my goals?":null,"Plan tomorrow.","What changed this week?"].filter((item):item is string=>Boolean(item)).slice(0,4);
   return <main className="py-mobile-shell md:py-shell-narrow">
     <header className="py-animate-in mb-6"><div className="py-eyebrow mb-1.5 text-accent-text">Your personal chief of staff</div><h1 className="py-title">Coach</h1><p className="py-subtitle max-w-[620px]">Decide what matters, turn goals into a plan, and learn from the patterns in your real Project You+ context.</p></header>
     <section className="py-glass-hero py-animate-in py-stagger-1 mb-4 p-5"><div className="flex items-start gap-3"><span className="py-pulse-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-accent-2"/><div><div className="py-eyebrow text-[#C8AEFF]">Coach signal</div><p className="m-0 mt-2 text-[14px] font-medium leading-relaxed text-white">{signal}</p></div></div></section>
-    <section className="py-glass-soft py-animate-in py-stagger-2 overflow-hidden"><CoachChat contextSummary={summary} contextReady={contextReady}/></section>
+    <section className="py-glass-soft py-animate-in py-stagger-2 overflow-hidden"><CoachChat contextSummary={summary} contextReady={contextReady} initialMessages={conversation.map(item=>({id:item.id,role:item.role,content:item.content}))} initialPrompts={prompts}/></section>
   </main>
 }
