@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { recordUserEvent } from "@/lib/ai/user-events";
 
 export type NutritionFood = {
   name: string;
@@ -28,7 +29,7 @@ export async function saveNutritionMeal(input: { mealName: string; foods: Nutrit
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in again to save nutrition." };
 
-  const { error } = await supabase.from("nutrition_logs").insert({
+  const { data: meal, error } = await supabase.from("nutrition_logs").insert({
     user_id: user.id,
     meal_name: String(input.mealName || "Meal").slice(0, 100),
     calories: Math.round(totals.calories),
@@ -45,9 +46,23 @@ export async function saveNutritionMeal(input: { mealName: string; foods: Nutrit
       fat: round(safe(food.fat)),
     })),
     source: input.source === "openai" ? "nutrition_ai" : "manual",
-  });
+  }).select("id,logged_at").single();
 
   if (error) return { error: error.message };
+  try {
+    await recordUserEvent(supabase, {
+      userId: user.id,
+      eventName: "meal.logged",
+      domain: "health",
+      entityType: "nutrition_log",
+      entityId: meal.id,
+      occurredAt: meal.logged_at,
+      value: Math.round(totals.calories),
+      metadata: { mealName: String(input.mealName || "Meal").slice(0, 100), protein: round(totals.protein), source: input.source === "openai" ? "nutrition_ai" : "manual" },
+    });
+  } catch (eventError) {
+    console.error("Nutrition intelligence event skipped:", eventError);
+  }
   revalidatePath("/health");
   revalidatePath("/dashboard");
   revalidatePath("/coach");
