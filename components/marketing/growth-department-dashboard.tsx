@@ -8,11 +8,12 @@ type Overview = {
   content: RecordRow[]; trends: RecordRow[]; metrics: RecordRow[]; community: RecordRow[];
   partnerships: RecordRow[]; learnings: RecordRow[]; campaigns: RecordRow[]; runs: RecordRow[];
   growthScore: { score: number; label: string; components: Record<string, number> };
+  instagram: { status: string; connected_at: string | null; metadata: Record<string, any> | null } | null;
 };
 
 type Tab = "command" | "content" | "intelligence" | "community" | "partners" | "learning";
 
-const EMPTY: Overview = { content: [], trends: [], metrics: [], community: [], partnerships: [], learnings: [], campaigns: [], runs: [], growthScore: { score: 0, label: "Needs data", components: { velocity: 0, engagement: 0, conversion: 0, momentum: 0 } } };
+const EMPTY: Overview = { content: [], trends: [], metrics: [], community: [], partnerships: [], learnings: [], campaigns: [], runs: [], growthScore: { score: 0, label: "Needs data", components: { velocity: 0, engagement: 0, conversion: 0, momentum: 0 } }, instagram: null };
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: "command", label: "Command" }, { id: "content", label: "Content Factory" }, { id: "intelligence", label: "Trend Radar" },
   { id: "community", label: "Community" }, { id: "partners", label: "Creator CRM" }, { id: "learning", label: "Learning" },
@@ -92,6 +93,7 @@ export function GrowthDepartmentDashboard() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/50">Strategy, creation, distribution, community, partnerships and learning coordinated as one Instagram-first growth system.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {data.instagram?.status === "connected" ? <form action="/api/integrations/instagram/sync" method="post"><button className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-200">Instagram · @{String(data.instagram.metadata?.username || "connected")}</button></form> : <a href="/api/integrations/instagram/start" className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-4 py-3 text-sm font-medium text-violet-200">Connect Instagram</a>}
             <button onClick={() => void refresh()} className="rounded-2xl border border-white/10 bg-white/[.05] px-4 py-3 text-sm font-medium hover:bg-white/[.08]">Refresh</button>
             <button onClick={autopilot} disabled={busy === "autopilot"} className="rounded-2xl bg-violet-500 px-5 py-3 text-sm font-semibold shadow-[0_12px_38px_rgba(124,58,237,.32)] hover:bg-violet-400 disabled:opacity-50">{busy === "autopilot" ? "Building today…" : "Run Morning Autopilot"}</button>
           </div>
