@@ -2,27 +2,11 @@ import { NextResponse } from "next/server";
 import { callOpenAIText, isOpenAIConfigured } from "@/lib/ai/openai";
 import { assertDepartmentCanSpend, recordEstimatedSpend } from "@/lib/ai/department-budget";
 import { MARKETING_AGENT_MAP, type MarketingAgentId } from "@/lib/marketing/agents";
-import { createClient } from "@/lib/supabase/server";
-
-function ownerEmails() {
-  return (process.env.PROJECT_YOU_OWNER_EMAILS || "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-async function getOwnerContext() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const allowlist = ownerEmails();
-  const email = user?.email?.toLowerCase();
-  const authorized = Boolean(user && email && allowlist.length > 0 && allowlist.includes(email));
-  return { supabase, user, authorized };
-}
+import { requireMarketingOwner } from "@/lib/marketing/server";
 
 export async function POST(request: Request) {
-  const { supabase, user, authorized } = await getOwnerContext();
-  if (!authorized || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { supabase, user, allowed } = await requireMarketingOwner();
+  if (!allowed || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isOpenAIConfigured()) return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 503 });
 
   const body = (await request.json()) as { agentId?: MarketingAgentId; context?: string; objective?: string };
@@ -32,6 +16,8 @@ export async function POST(request: Request) {
 
   try {
     await assertDepartmentCanSpend(supabase, user.id, "growth", 2);
+    const { data: setting } = await supabase.from("marketing_agent_settings").select("enabled").eq("owner_id", user.id).eq("agent_id", agentId).maybeSingle();
+    if (setting?.enabled === false) return NextResponse.json({ error: `${agent.name} is turned off.` }, { status: 429 });
 
     const task = [
       `Today is ${new Date().toISOString().slice(0, 10)}.`,

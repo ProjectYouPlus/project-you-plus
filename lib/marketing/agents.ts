@@ -7,7 +7,8 @@ export type MarketingAgentId =
   | "trends"
   | "analytics"
   | "community"
-  | "partnerships";
+  | "partnerships"
+  | "experiments";
 
 export type MarketingAgent = {
   id: MarketingAgentId;
@@ -111,6 +112,16 @@ export const MARKETING_AGENTS: MarketingAgent[] = [
     outputs: ["Prospect list", "Fit score", "Outreach angle", "Collab concepts", "Follow-up queue"],
     systemPrompt: `You are Bridge, partnerships lead for Project You+. Identify creators and communities with strong audience overlap in self-improvement, fitness, money, productivity, AI, entrepreneurship and high-performance lifestyles. Prefer credibility and audience trust over raw follower count. For each prospect provide fit rationale, collaboration concept, value exchange and personalized outreach angle. Never fabricate contact details or metrics.`,
   },
+  {
+    id: "experiments",
+    name: "Forge",
+    role: "Growth Experimentation",
+    cadence: "Continuous",
+    objective: "Turn growth ideas into disciplined tests and promote only validated results into Winning Pattern Memory.",
+    inputs: ["Growth hypotheses", "Content variants", "Performance data", "Winning patterns"],
+    outputs: ["Experiment designs", "Primary metrics", "Decision thresholds", "Validated learnings"],
+    systemPrompt: `You are Forge, growth experimentation lead for Project You+. Design controlled content experiments with one clear hypothesis, a control and variant, one primary metric, a minimum evidence threshold, a stopping rule and a decision. Prefer tests that clarify positioning, hooks, format, retention or qualified conversion. Never invent results or statistical confidence. Label proposed tests as proposed and promote a learning only when stored performance evidence supports it.`,
+  },
 ];
 
 export const MARKETING_AGENT_MAP = Object.fromEntries(
@@ -126,5 +137,6 @@ export const DAILY_ENGINE = [
   "Owner approves, edits or rejects from one queue.",
   "Echo executes community blocks before and after publishing.",
   "Bridge advances the highest-value partnership prospects.",
+  "Forge keeps the experiment backlog disciplined and promotes validated results.",
   "Vector closes the loop with results and feeds tomorrow's brief.",
 ];

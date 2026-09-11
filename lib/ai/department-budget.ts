@@ -10,7 +10,7 @@ export async function getDepartmentBudget(supabase: SupabaseLike, ownerId: strin
   const month = new Date().toISOString().slice(0, 7) + "-01";
   const { data } = await supabase
     .from("ai_department_budget")
-    .select("owner_id,monthly_budget_cents,development_enabled,growth_enabled,budget_month,estimated_spend_cents")
+    .select("owner_id,monthly_budget_cents,development_enabled,growth_enabled,growth_mode,budget_month,estimated_spend_cents")
     .eq("owner_id", ownerId)
     .maybeSingle();
 
@@ -20,6 +20,7 @@ export async function getDepartmentBudget(supabase: SupabaseLike, ownerId: strin
       monthly_budget_cents: DEFAULT_MONTHLY_BUDGET_CENTS,
       development_enabled: true,
       growth_enabled: true,
+      growth_mode: "assisted",
       budget_month: month,
       estimated_spend_cents: 0,
     };

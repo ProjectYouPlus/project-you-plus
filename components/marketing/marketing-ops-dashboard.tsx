@@ -23,6 +23,7 @@ const initialStates: Record<MarketingAgentId, AgentState> = {
   analytics: "ready",
   community: "ready",
   partnerships: "ready",
+  experiments: "ready",
 };
 
 const samplePipeline = [
