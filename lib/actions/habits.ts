@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
+import { refreshProgressionAfterMutation } from "@/lib/progression/service";
 
 export async function createHabit(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
@@ -28,7 +29,9 @@ export async function logHabitToday(habitId: string) {
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await supabase.from("habit_logs").upsert({ habit_id: habitId, user_id: user.id, logged_at: today }, { onConflict: "habit_id,logged_at" });
   if (error) throw new Error(error.message);
+  await refreshProgressionAfterMutation();
   revalidatePath("/habits");
   revalidatePath("/dashboard");
   revalidatePath("/review");
+  revalidatePath("/progress");
 }

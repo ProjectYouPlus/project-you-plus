@@ -5,9 +5,10 @@ import { getGoals } from "@/lib/data/goals";
 import { getTasks } from "@/lib/data/tasks";
 import { getHabits } from "@/lib/data/habits";
 import { createClient } from "@/lib/supabase/server";
+import { getStoredProgression } from "@/lib/progression/service";
 
 export default async function YouPage() {
-  const [profile, goals, tasks, habits, counts] = await Promise.all([getProfile(), getGoals(), getTasks(), getHabits(), getCounts()]);
+  const [profile, goals, tasks, habits, counts, progression] = await Promise.all([getProfile(), getGoals(), getTasks(), getHabits(), getCounts(), getStoredProgression()]);
   const name = (profile.fullName ?? "You").split(" ")[0];
   const activeGoals = goals.filter((goal) => goal.status === "active");
   const linkedTasks = tasks.filter((task) => task.goalId).length;
@@ -19,6 +20,8 @@ export default async function YouPage() {
     <header className="mb-7 flex items-center justify-between gap-4"><div><h1 className="py-title">{name}</h1><p className="py-subtitle">Your direction, routines, schedule, and personal settings.</p></div><Link href="/profile" className="py-glass flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-text-1">{name.slice(0,2).toUpperCase()}</Link></header>
 
     <section className="py-glass-hero p-5"><div className="flex items-end justify-between gap-5"><div><div className="text-[39px] font-semibold tracking-[-.05em] text-white">{setupPct}%</div><div className="mt-1 text-[12px] font-medium text-white">Life context ready</div></div><div className="max-w-[210px] text-right text-[11px] leading-relaxed text-[#BDB7C9]">{setupPct===100?"Your core setup is connected. Keep it current and Coach gets sharper.":"Add the missing pieces below so Project You+ understands the constraints around your goals."}</div></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[.07]"><div className="h-full rounded-full bg-accent-2 transition-all" style={{width:`${setupPct}%`}}/></div></section>
+
+    <Link href="/progress" className="py-glass-soft py-pressable mt-4 block p-4"><div className="flex items-center gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-500/10 text-[23px] font-bold text-accent-text">{progression?.level ?? "—"}</div><div className="min-w-0 flex-1"><div className="text-[13.5px] font-semibold text-text-1">{progression ? `${progression.stage} progression` : "Progression is calibrating"}</div><div className="mt-1 truncate text-[10.5px] text-text-3">{progression ? `${progression.highestMilestone ? `Highest milestone ${progression.highestMilestone}` : "First milestone ahead"} · ${progression.achievements.length} achievement${progression.achievements.length===1?"":"s"}${progression.recentWins[0]?` · ${progression.recentWins[0].title}`:""}` : "Open Progress to establish the first evidence-backed level."}</div></div><span className="text-[18px] text-text-3">›</span></div></Link>
 
     <section className="mt-7"><div className="mb-3"><h2 className="m-0 text-[20px] font-semibold tracking-[-.025em] text-text-1">Direction</h2><p className="m-0 mt-1 text-[11px] text-text-3">What you want, and the system supporting it.</p></div><div className="py-glass-soft divide-y divide-white/[.06] px-4"><Row href="/goals" icon="goals" title="Goals" value={`${activeGoals.length} active`} sub={activeGoals.length?activeGoals.slice(0,2).map((goal)=>goal.title).join(" · "):"Create the outcomes Project You+ should optimize for"}/><Row href="/tasks" icon="tasks" title="Tasks" value={`${linkedTasks}/${tasks.length} linked`} sub="Actions are prioritized better when they advance a goal"/><Row href="/habits" icon="habits" title="Habits" value={`${linkedHabits}/${habits.length} linked`} sub="Build repeatable behaviors behind your outcomes"/></div></section>
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { refreshProgressionAfterMutation } from "@/lib/progression/service";
 
 const GOAL_TYPES = new Set(["emergency_fund", "savings", "debt_payoff", "purchase", "investment", "custom"]);
 
@@ -22,6 +23,7 @@ export async function saveMonthlyBudget(formData: FormData) {
     : supabase.from("budgets").insert({ user_id: user.id, category, monthly_limit: monthlyLimit, period_start: month });
   const { error } = await query;
   if (error) return { error: error.message };
+  await refreshProgressionAfterMutation();
   refreshFinanceViews();
   return { error: null };
 }

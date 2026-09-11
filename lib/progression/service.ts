@@ -2,53 +2,89 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { UserContext } from "@/lib/ai/context";
-import { ONE_PERCENT_BRAND_ASSET,type ProgressionAchievement,type ProgressionStage,type ProgressionState } from "@/lib/types/progression";
+import { calculateProgression, type ProgressionSnapshot, type ProgressionTask } from "./calculator";
+import { ACHIEVEMENTS, qualifyAchievements } from "./achievements";
+import { PROGRESSION_CONFIG } from "./config";
+import { ONE_PERCENT_BRAND_ASSET, type ProgressionAchievement, type ProgressionMilestone, type ProgressionState, type RecentWin } from "@/lib/types/progression";
 
-type Unlock={key:string;title:string;category:ProgressionAchievement["category"];threshold?:number;metadata?:Record<string,unknown>};
-const COMPLETIONS=new Set(["task.completed","habit.completed","workout.completed"]);
+const COMPLETIONS = new Set(["task.completed", "habit.completed", "workout.completed"]);
+const WIN_TYPES = new Set(["achievement.unlocked", "milestone.unlocked", "progression.personal_best", "progression.one_percent_earned", "finance.goal_completed"]);
 
-export async function evaluateProgression(context:UserContext):Promise<ProgressionState>{
- const client=await createClient();const {data:{user}}=await client.auth.getUser();if(!user)throw new Error("Not signed in.");const admin=createAdminClient();const now=new Date(),today=isoDate(now);
- const score=context.score.score.score,coverage=context.score.coveragePct,scoreBreakdown=context.score.score.breakdown;
- const breakdown={...scoreBreakdown,financeScore:context.financeOverview.score.overall,finance:{overall:context.financeOverview.score.overall,budget:context.financeOverview.score.budget,cashFlow:context.financeOverview.score.cashFlow,savings:context.financeOverview.score.savings,consistency:context.financeOverview.score.consistency}};
- await admin.from("score_snapshots").upsert({user_id:user.id,score,coverage_pct:coverage,breakdown,captured_on:today},{onConflict:"user_id,captured_on"});
- const {data:previousScore}=await admin.from("score_snapshots").select("score,captured_on").eq("user_id",user.id).neq("captured_on",today).order("captured_on",{ascending:false}).limit(1).maybeSingle();
- if(!previousScore||Number(previousScore.score)!==score)await admin.from("behavior_events").upsert({user_id:user.id,event_type:"score.changed",occurred_at:now.toISOString(),source_table:"score_snapshots",source_id:today,dedupe_key:`score.changed:snapshot:${today}:${score}`,payload:{score,previous_score:previousScore?Number(previousScore.score):null,coverage_pct:coverage}},{onConflict:"user_id,dedupe_key",ignoreDuplicates:true});
- const priorMonthStart=new Date(now.getFullYear(),now.getMonth()-1,1),currentMonthStart=new Date(now.getFullYear(),now.getMonth(),1),historyStart=new Date(now);historyStart.setDate(historyStart.getDate()-60);
- const [snapshotsRes,eventsRes,profileRes,goalsRes,reviewsRes,plansRes,logsRes,budgetsRes,txRes,existingRes]=await Promise.all([
-  admin.from("score_snapshots").select("score,coverage_pct,breakdown,captured_on").eq("user_id",user.id).order("captured_on",{ascending:false}).limit(60),
-  admin.from("behavior_events").select("id,event_type,occurred_at,source_table,source_id").eq("user_id",user.id).gte("occurred_at",historyStart.toISOString()).order("occurred_at"),
-  admin.from("profiles").select("created_at").eq("id",user.id).maybeSingle(),admin.from("goals").select("id,progress,status").eq("user_id",user.id),
-  admin.from("weekly_reviews").select("id,week_start").eq("user_id",user.id).limit(1),admin.from("workout_plans").select("id,schedule").eq("user_id",user.id).eq("active",true).limit(1).maybeSingle(),
-  admin.from("workout_plan_logs").select("plan_id,session_key,completed_on").eq("status","completed").eq("user_id",user.id).gte("completed_on",isoDate(daysAgo(now,14))),
-  admin.from("budgets").select("monthly_limit,period_start").eq("user_id",user.id).eq("period_start",isoDate(priorMonthStart)),
-  admin.from("transactions").select("amount,occurred_at").eq("user_id",user.id).gte("occurred_at",priorMonthStart.toISOString()).lt("occurred_at",currentMonthStart.toISOString()),
-  admin.from("user_achievements").select("achievement_key").eq("user_id",user.id)
- ]);
- const snapshots=snapshotsRes.data??[],events=eventsRes.data??[],existing=new Set((existingRes.data??[]).map(row=>row.achievement_key)),unlocks:Unlock[]=[];
- const highest=Math.max(score,...snapshots.map(row=>Number(row.score)));for(let threshold=5;threshold<=Math.min(95,Math.floor(highest/5)*5);threshold+=5)unlocks.push({key:`score_${threshold}`,title:threshold%10===0?`${threshold} Point Milestone`:`${threshold} Point Recognition`,category:threshold%10===0?"milestone":"score",threshold,metadata:{score:threshold}});
- const activeDays=[...new Set(events.filter(event=>COMPLETIONS.has(event.event_type)).map(event=>String(event.occurred_at).slice(0,10)))].sort();
- if(activeDays.length)unlocks.push({key:"first_completed_day",title:"First Completed Day",category:"behavior"});
- if(activeDays.length>=7)unlocks.push({key:"first_completed_week",title:"First Completed Week",category:"behavior"});
- if(hasSevenDayRun(activeDays))unlocks.push({key:"seven_day_consistency",title:"7-Day Consistency",category:"behavior"});
- if((goalsRes.data??[]).some(goal=>goal.status==="completed"||Number(goal.progress)>=100))unlocks.push({key:"first_completed_goal",title:"First Completed Goal",category:"behavior"});
- if((reviewsRes.data??[]).length)unlocks.push({key:"first_weekly_review",title:"First Weekly Review",category:"behavior"});
- if(profileRes.data?.created_at&&now.getTime()-new Date(profileRes.data.created_at).getTime()>=30*86400000)unlocks.push({key:"first_month",title:"First Month",category:"behavior"});
- if(fullWorkoutWeek(plansRes.data,logsRes.data??[],now))unlocks.push({key:"full_scheduled_workout_week",title:"Full Scheduled Workout Week",category:"behavior"});
- const budget=(budgetsRes.data??[]).reduce((sum,row)=>sum+Number(row.monthly_limit||0),0),spend=Math.abs((txRes.data??[]).filter(row=>Number(row.amount)<0).reduce((sum,row)=>sum+Number(row.amount),0));if(budget>0&&(txRes.data??[]).length&&spend<=budget)unlocks.push({key:`budget_month_on_target_${isoDate(priorMonthStart).slice(0,7)}`,title:"Budget Month On Target",category:"behavior",metadata:{month:isoDate(priorMonthStart).slice(0,7),budget,spend}});
- const recent=snapshots.filter(row=>new Date(`${row.captured_on}T12:00:00`)>=daysAgo(now,14)),highDays=recent.filter(row=>Number(row.score)>=90&&Number(row.coverage_pct)>=75).length,domainCount=Object.values(scoreBreakdown).filter(value=>Number(value)>=80).length;
- const eligible=score>=99&&coverage>=75&&snapshots.length>=14&&highDays>=7&&domainCount>=4;if(eligible)unlocks.push({key:"one_percent",title:"1%",category:"elite",threshold:99,metadata:{calibrationDays:snapshots.length,sustainedHighDays:highDays,contributingDomains:domainCount}});
- for(const unlock of unlocks)if(!existing.has(unlock.key))await unlockAchievement(admin,user.id,unlock);
- const stage=eligible?"1%":stageFor(score),previous=(await admin.from("user_progression").select("one_percent_unlocked,one_percent_unlocked_at").eq("user_id",user.id).maybeSingle()).data;
- const onePercentUnlocked=Boolean(previous?.one_percent_unlocked)||eligible,onePercentAt=previous?.one_percent_unlocked_at??(eligible?now.toISOString():null),currentStage:ProgressionStage=onePercentUnlocked?"1%":stage;
- await admin.from("user_progression").upsert({user_id:user.id,current_level:currentStage,highest_score:highest,current_score:score,coverage_pct:coverage,sustained_high_days:highDays,one_percent_unlocked:onePercentUnlocked,one_percent_unlocked_at:onePercentAt,updated_at:now.toISOString()},{onConflict:"user_id"});
- const {data:rows}=await admin.from("user_achievements").select("id,achievement_key,title,category,threshold,metadata,unlocked_at").eq("user_id",user.id).order("unlocked_at",{ascending:false});
- return{stage:currentStage,currentScore:score,highestScore:highest,coveragePct:coverage,sustainedHighDays:highDays,onePercentUnlocked,onePercentUnlockedAt:onePercentAt,calibrationDays:snapshots.length,contributingDomains:domainCount,numericLevel:null,numericProgressionAvailable:false,achievements:(rows??[]).map(row=>({id:row.id,key:row.achievement_key,title:row.title,category:row.category as ProgressionAchievement["category"],threshold:row.threshold==null?null:Number(row.threshold),unlockedAt:row.unlocked_at,metadata:row.metadata??{}})),brandAsset:onePercentUnlocked?ONE_PERCENT_BRAND_ASSET:null};
+export async function evaluateProgression(context: UserContext): Promise<ProgressionState> {
+  const client = await createClient(), { data: { user } } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  const admin = createAdminClient(), now = new Date(), today = isoDate(now), start = new Date(now); start.setDate(start.getDate() - 100);
+  const currentScore = context.score.score.score, coveragePct = context.score.coveragePct;
+  const breakdown = { ...context.score.score.breakdown, health: context.domains.health.data?.score ?? null, finance: context.domains.finance.data?.score ?? null };
+  await admin.from("score_snapshots").upsert({ user_id: user.id, score: currentScore, coverage_pct: coveragePct, breakdown, captured_on: today }, { onConflict: "user_id,captured_on" });
+  const [snapshotsRes, eventsRes, tasksRes, goalsRes, reviewsRes, profileRes, budgetsRes, txRes, previousRes] = await Promise.all([
+    admin.from("score_snapshots").select("score,coverage_pct,breakdown,captured_on").eq("user_id", user.id).gte("captured_on", isoDate(start)).order("captured_on"),
+    admin.from("behavior_events").select("id,event_type,occurred_at,source_table,source_id,payload").eq("user_id", user.id).gte("occurred_at", start.toISOString()).order("occurred_at"),
+    admin.from("tasks").select("id,title,tier,created_at,completed_at").eq("user_id", user.id).gte("created_at", start.toISOString()),
+    admin.from("goals").select("id,status,progress,created_at,updated_at,completed_at").eq("user_id", user.id),
+    admin.from("weekly_reviews").select("id,created_at,week_start").eq("user_id", user.id).order("created_at"),
+    admin.from("profiles").select("created_at").eq("id", user.id).maybeSingle(),
+    admin.from("budgets").select("monthly_limit,period_start").eq("user_id", user.id),
+    admin.from("transactions").select("amount,occurred_at").eq("user_id", user.id).gte("occurred_at", startOfPriorMonth(now).toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
+    admin.from("user_progression").select("*").eq("user_id", user.id).maybeSingle(),
+  ]);
+  throwErrors(snapshotsRes.error, eventsRes.error, tasksRes.error, previousRes.error);
+  const snapshots: ProgressionSnapshot[] = (snapshotsRes.data ?? []).map((row) => ({ date: String(row.captured_on), score: Number(row.score), coveragePct: Number(row.coverage_pct), domains: scoreDomains(row.breakdown) }));
+  const events = eventsRes.data ?? [], activeDays = [...new Set(events.filter((event) => COMPLETIONS.has(event.event_type)).map((event) => String(event.occurred_at).slice(0, 10)))];
+  const tasks: ProgressionTask[] = (tasksRes.data ?? []).map((row) => ({ title: String(row.title), tier: String(row.tier), createdAt: String(row.created_at), completedAt: row.completed_at ? String(row.completed_at) : null }));
+  const previous = previousRes.data;
+  const calculation = calculateProgression({ snapshots, activityDays: activeDays, tasks, previousLevel: previous?.current_level_number == null ? null : Number(previous.current_level_number), previousCalculatedOn: previous?.calculated_at ?? null, now });
+  const goalDates = (goalsRes.data ?? []).filter((goal) => goal.status === "completed" || Number(goal.progress) >= 100).map((goal) => String(goal.completed_at ?? goal.updated_at ?? goal.created_at));
+  const workoutDays = events.filter((event) => event.event_type === "workout.completed").map((event) => String(event.occurred_at).slice(0, 10));
+  const qualified = qualifyAchievements({ activeDays, goalCompletions: goalDates, workoutDays, reviewDates: (reviewsRes.data ?? []).map((row) => String(row.created_at ?? row.week_start)), onTargetBudgetMonths: onTargetBudgetMonths(budgetsRes.data ?? [], txRes.data ?? [], now), profileCreatedAt: profileRes.data?.created_at ?? null, now });
+  for (const achievement of qualified) await unlockAchievement(admin, user.id, achievement);
+  const previousHighest = Number(previous?.highest_level ?? previous?.current_level_number ?? 0), highestLevel = Math.max(previousHighest, calculation.level), oldHighestMilestone = nullableNumber(previous?.highest_milestone);
+  const reached = PROGRESSION_CONFIG.milestones.filter((milestone) => calculation.level >= milestone.level);
+  for (const milestone of reached) await recordMilestone(admin, user.id, milestone.level, milestone.stage, now, calculation.index);
+  const highestMilestone = Math.max(oldHighestMilestone ?? 0, ...reached.map((item) => item.level)) || null;
+  const onePercentCurrent = calculation.qualifiesForOnePercent && calculation.level === 99, onePercentUnlocked = Boolean(previous?.one_percent_unlocked) || onePercentCurrent, onePercentUnlockedAt = previous?.one_percent_unlocked_at ?? (onePercentCurrent ? now.toISOString() : null);
+  await admin.from("user_progression").upsert({ user_id: user.id, current_level: calculation.stage, current_level_number: calculation.level, progression_index: calculation.index, progression_status: calculation.status, highest_level: highestLevel, highest_milestone: highestMilestone, next_milestone: calculation.nextMilestone?.level ?? null, limiting_factors: calculation.limitingFactors, integrity_flags: calculation.integrityFlags, averages: calculation.averages, consistency_pct: calculation.consistency, domain_balance: calculation.domainBalance, domain_floor: calculation.domainFloor, activity_days_90: calculation.activityDays90, calibration_days:new Set(snapshots.map((item)=>item.date)).size, current_score: currentScore, highest_score: Math.max(Number(previous?.highest_score ?? 0), currentScore), coverage_pct: coveragePct, sustained_high_days: snapshots.filter((item) => item.score >= 90).length, one_percent_current: onePercentCurrent, one_percent_unlocked: onePercentUnlocked, one_percent_unlocked_at: onePercentUnlockedAt, calculated_at: now.toISOString(), updated_at: now.toISOString() }, { onConflict: "user_id" });
+  const priorToday = await admin.from("progression_history").select("level,progression_index").eq("user_id", user.id).eq("recorded_on", today).maybeSingle();
+  if (!priorToday.data || Number(priorToday.data.level) !== calculation.level || Number(priorToday.data.progression_index) !== calculation.index) await admin.from("progression_history").upsert({ user_id: user.id, level: calculation.level, progression_index: calculation.index, stage: calculation.stage, status: calculation.status, reasons: calculation.limitingFactors, recorded_on: today }, { onConflict: "user_id,recorded_on" });
+  if (highestLevel > previousHighest) await event(admin, user.id, "progression.personal_best", `progression.personal_best:${highestLevel}`, now.toISOString(), { level: highestLevel });
+  if (onePercentCurrent && !previous?.one_percent_unlocked) await event(admin, user.id, "progression.one_percent_earned", "progression.one_percent_earned", now.toISOString(), { level: 99 });
+  return loadState(admin, user.id, { level: calculation.level, index: calculation.index, status: calculation.status, stage: calculation.stage, nextMilestone: calculation.nextMilestone, limitingFactors: calculation.limitingFactors, integrityFlags: calculation.integrityFlags, averages: calculation.averages, consistency: calculation.consistency, domainBalance: calculation.domainBalance, domainFloor: calculation.domainFloor, activityDays90: calculation.activityDays90, calibrationDays:new Set(snapshots.map((item)=>item.date)).size, currentScore, coveragePct, highestLevel, highestMilestone, onePercentCurrent, onePercentUnlocked, onePercentUnlockedAt });
 }
 
-async function unlockAchievement(admin:ReturnType<typeof createAdminClient>,userId:string,item:Unlock){const {data}=await admin.from("user_achievements").upsert({user_id:userId,achievement_key:item.key,title:item.title,category:item.category,threshold:item.threshold??null,metadata:item.metadata??{}},{onConflict:"user_id,achievement_key",ignoreDuplicates:true}).select("id,unlocked_at").maybeSingle();if(!data)return;const type=item.category==="score"||item.category==="milestone"||item.category==="elite"?"milestone.unlocked":"achievement.unlocked";await admin.from("behavior_events").upsert({user_id:userId,event_type:type,occurred_at:data.unlocked_at,source_table:"user_achievements",source_id:data.id,dedupe_key:`${type}:progression:${item.key}`,payload:{key:item.key,title:item.title,threshold:item.threshold??null}},{onConflict:"user_id,dedupe_key",ignoreDuplicates:true});}
-function stageFor(score:number):ProgressionStage{return score>=80?"Elite":score>=60?"Alignment":score>=40?"Momentum":"Foundation";}
-function hasSevenDayRun(days:string[]){const set=new Set(days);return days.some(value=>{const date=new Date(`${value}T12:00:00`);for(let i=1;i<7;i++){date.setDate(date.getDate()+1);if(!set.has(isoDate(date)))return false}return true});}
-function fullWorkoutWeek(plan:{id:string;schedule:unknown}|null,logs:Array<{plan_id:string;session_key:string;completed_on:string}>,now:Date){if(!plan||!Array.isArray(plan.schedule))return false;const monday=daysAgo(now,(now.getDay()+6)%7+7),sunday=new Date(monday);sunday.setDate(monday.getDate()+6);const expected=(plan.schedule as Array<{key?:string;dayIndex?:number}>).filter(item=>item.key&&Number.isInteger(item.dayIndex));if(!expected.length)return false;return expected.every(item=>{const day=new Date(monday);day.setDate(monday.getDate()+((Number(item.dayIndex)+6)%7));return day<=sunday&&logs.some(log=>log.plan_id===plan.id&&log.session_key===item.key&&log.completed_on===isoDate(day))});}
-function daysAgo(date:Date,count:number){const copy=new Date(date);copy.setDate(copy.getDate()-count);copy.setHours(0,0,0,0);return copy;}
-function isoDate(date:Date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;}
+export async function getStoredProgression(): Promise<ProgressionState | null> {
+  const client = await createClient(), { data: { user } } = await client.auth.getUser(); if (!user) return null;
+  const admin = createAdminClient(), { data: row } = await admin.from("user_progression").select("*").eq("user_id", user.id).maybeSingle(); if (!row) return null;
+  const nextLevel = nullableNumber(row.next_milestone), next = PROGRESSION_CONFIG.milestones.find((item) => item.level === nextLevel) ?? null;
+  return loadState(admin, user.id, { level: Number(row.current_level_number), index: Number(row.progression_index), status: row.progression_status, stage: row.current_level, nextMilestone: next, limitingFactors: row.limiting_factors ?? [], integrityFlags: row.integrity_flags ?? [], averages: row.averages ?? {}, consistency: Number(row.consistency_pct), domainBalance: nullableNumber(row.domain_balance), domainFloor: nullableNumber(row.domain_floor), activityDays90: Number(row.activity_days_90), calibrationDays:Number(row.calibration_days), currentScore: Number(row.current_score), coveragePct: Number(row.coverage_pct), highestLevel: Number(row.highest_level), highestMilestone: nullableNumber(row.highest_milestone), onePercentCurrent: Boolean(row.one_percent_current), onePercentUnlocked: Boolean(row.one_percent_unlocked), onePercentUnlockedAt: row.one_percent_unlocked_at });
+}
+
+export async function refreshProgressionAfterMutation() {
+  try { const { buildUserContext } = await import("@/lib/ai/context"); await evaluateProgression(await buildUserContext()); }
+  catch (error) { console.error("Progression refresh failed:", error); }
+}
+
+type StateCore = Omit<ProgressionState, "achievements" | "milestones" | "recentWins" | "brandAsset">;
+async function loadState(admin: ReturnType<typeof createAdminClient>, userId: string, core: StateCore): Promise<ProgressionState> {
+  const [achievementRes, milestoneRes, winsRes] = await Promise.all([
+    admin.from("user_achievements").select("id,achievement_key,title,category,tier,earned_evidence,metadata,unlocked_at").eq("user_id", userId).order("unlocked_at", { ascending: false }),
+    admin.from("progression_milestones").select("id,level,stage,reached_at").eq("user_id", userId).order("level", { ascending: false }),
+    admin.from("behavior_events").select("id,event_type,occurred_at,payload").eq("user_id", userId).in("event_type", [...WIN_TYPES]).order("occurred_at", { ascending: false }).limit(12),
+  ]);
+  const definitions = new Map(ACHIEVEMENTS.map((item) => [item.key, item]));
+  const achievements: ProgressionAchievement[] = (achievementRes.data ?? []).flatMap((row) => { const definition = definitions.get(row.achievement_key); if (!definition) return []; return [{ id: row.id, key: row.achievement_key, title: definition.title, description: definition.description, category: definition.category, tier: definition.tier, unlockedAt: row.unlocked_at, evidence: row.earned_evidence ?? row.metadata ?? {} }]; });
+  const milestones: ProgressionMilestone[] = (milestoneRes.data ?? []).map((row) => ({ id: row.id, level: Number(row.level), stage: row.stage, reachedAt: row.reached_at }));
+  const recentWins: RecentWin[] = (winsRes.data ?? []).map((row) => ({ id: row.id, type: row.event_type, occurredAt: row.occurred_at, title: winTitle(row.event_type, row.payload) }));
+  return { ...core, achievements, milestones, recentWins, brandAsset: core.onePercentUnlocked ? ONE_PERCENT_BRAND_ASSET : null };
+}
+
+async function unlockAchievement(admin: ReturnType<typeof createAdminClient>, userId: string, item: ReturnType<typeof qualifyAchievements>[number]) { const { data } = await admin.from("user_achievements").upsert({ user_id: userId, achievement_key: item.key, title: item.title, category: item.category, tier: item.tier, threshold: null, metadata: {}, earned_evidence: item.evidence, unlocked_at: item.earnedAt }, { onConflict: "user_id,achievement_key", ignoreDuplicates: true }).select("id,unlocked_at").maybeSingle(); if (data) await event(admin, userId, "achievement.unlocked", `achievement.unlocked:progression:${item.key}`, data.unlocked_at, { key: item.key, title: item.title, tier: item.tier }); }
+async function recordMilestone(admin: ReturnType<typeof createAdminClient>, userId: string, level: number, stage: string, now: Date, index: number) { const { data } = await admin.from("progression_milestones").upsert({ user_id: userId, level, stage, reached_at: now.toISOString(), evidence: { progressionIndex: index } }, { onConflict: "user_id,level", ignoreDuplicates: true }).select("id,reached_at").maybeSingle(); if (data) await event(admin, userId, "milestone.unlocked", `milestone.unlocked:progression:${level}`, data.reached_at, { level, stage, title: `${level} — ${stage}` }); }
+async function event(admin: ReturnType<typeof createAdminClient>, userId: string, eventType: string, dedupeKey: string, occurredAt: string, payload: Record<string, unknown>) { await admin.from("behavior_events").upsert({ user_id: userId, event_type: eventType, occurred_at: occurredAt, source_table: "user_progression", source_id: null, dedupe_key: dedupeKey, payload }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true }); }
+function scoreDomains(value: unknown) { const row = value && typeof value === "object" ? value as Record<string, unknown> : {}, result: Record<string, number> = {}; for (const [key, item] of Object.entries(row)) if (typeof item === "number" && Number.isFinite(item) && key !== "financeScore") result[key] = item; return result; }
+function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_start: string }>, transactions: Array<{ amount: unknown; occurred_at: string }>, now: Date) { const prior = startOfPriorMonth(now).toISOString().slice(0, 7), limit = budgets.filter((row) => String(row.period_start).slice(0, 7) === prior).reduce((sum, row) => sum + Number(row.monthly_limit || 0), 0), rows = transactions.filter((row) => String(row.occurred_at).slice(0, 7) === prior), spend = Math.abs(rows.filter((row) => Number(row.amount) < 0).reduce((sum, row) => sum + Number(row.amount), 0)); return limit > 0 && rows.length && spend <= limit ? [prior] : []; }
+function startOfMonth(date: Date) { return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)); }
+function startOfPriorMonth(date: Date) { return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1)); }
+function nullableNumber(value: unknown) { return value == null ? null : Number(value); }
+function winTitle(type: string, payload: unknown) { const row = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}; if (typeof row.title === "string") return row.title; if (type === "progression.personal_best") return `New personal best: Level ${row.level}`; if (type === "progression.one_percent_earned") return "1% earned"; if (type === "finance.goal_completed") return "Financial goal completed"; return type === "achievement.unlocked" ? "Achievement unlocked" : "Milestone reached"; }
+function throwErrors(...errors: Array<{ message: string } | null>) { const error = errors.find(Boolean); if (error) throw new Error(error.message); }
+function isoDate(date: Date) { return date.toISOString().slice(0, 10); }

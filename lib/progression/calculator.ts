@@ -1,0 +1,43 @@
+import { PROGRESSION_CONFIG } from "./config";
+
+export type ProgressionSnapshot = { date: string; score: number; coveragePct: number; domains: Record<string, number | null | undefined> };
+export type ProgressionTask = { title: string; tier: "critical" | "important" | "optional" | string; createdAt: string; completedAt: string | null };
+export type ProgressionCalculationInput = { snapshots: ProgressionSnapshot[]; activityDays: string[]; tasks: ProgressionTask[]; previousLevel?: number | null; previousCalculatedOn?: string | null; now?: Date };
+export type ProgressionCalculation = { level: number; rawLevel: number; index: number; status: "calibrating" | "active"; stage: "Foundation" | "Momentum" | "Alignment" | "Elite" | "1%"; nextMilestone: { level: number; stage: string } | null; averages: { days7: number | null; days28: number | null; days90: number | null }; consistency: number; domainBalance: number | null; domainFloor: number | null; activeDomains: number; activityDays90: number; integrityFlags: string[]; limitingFactors: string[]; qualifiesForOnePercent: boolean; evidenceCap: number };
+
+const DAY = 86_400_000;
+const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+export function calculateProgression(input: ProgressionCalculationInput): ProgressionCalculation {
+  const now = input.now ?? new Date(), ordered = [...input.snapshots].filter((row) => Number.isFinite(row.score)).sort((a, b) => a.date.localeCompare(b.date));
+  const recent = (days: number) => ordered.filter((row) => ageDays(row.date, now) < days && row.coveragePct >= 40);
+  const avg7 = average(recent(7).map((row) => row.score)), avg28 = average(recent(28).map((row) => row.score)), avg90 = average(recent(90).map((row) => row.score));
+  const activity = new Set(input.activityDays.filter((date) => ageDays(date, now) < 90)), expectedDays = Math.min(90, Math.max(1, spanDays(ordered, now))), consistency = clamp(activity.size / expectedDays * 100);
+  const domainValues = domainAverages(recent(28)), domainFloor = domainValues.length ? Math.min(...domainValues) : null, domainBalance = domainValues.length ? clamp(100 - standardDeviation(domainValues)) : null;
+  const execution = weightedExecution(input.tasks, now);
+  const available = ([[avg7, .2], [avg28, .3], [avg90, .25], [consistency, .1], [domainBalance, .1], [execution, .05]] as Array<[number | null, number]>).filter((item): item is [number, number] => item[0] !== null);
+  const totalWeight = available.reduce((sum, item) => sum + item[1], 0), index = totalWeight ? clamp(available.reduce((sum, item) => sum + item[0] * item[1], 0) / totalWeight) : 0;
+  const distinctSnapshotDays = new Set(ordered.map((row) => row.date)).size, evidenceCap = PROGRESSION_CONFIG.evidenceCaps.find((cap) => distinctSnapshotDays >= cap.minimumDays)!.maximumLevel, integrityFlags = detectIntegrityFlags(input.tasks, now), one = PROGRESSION_CONFIG.onePercent;
+  const qualifiesForOnePercent = index >= one.index && (avg28 ?? 0) >= one.average28 && (avg90 ?? 0) >= one.average90 && (domainFloor ?? 0) >= one.domainFloor && consistency >= one.consistency && activity.size >= one.activityDays && domainValues.length >= one.domainCount && integrityFlags.length === 0 && evidenceCap === 99;
+  let smoothed = qualifiesForOnePercent ? 99 : Math.min(98, evidenceCap, index);
+  const previous = input.previousLevel ?? null;
+  if (previous !== null) { const elapsed = Math.max(1, input.previousCalculatedOn ? Math.floor((now.getTime() - new Date(input.previousCalculatedOn).getTime()) / DAY) : 1); smoothed = Math.min(smoothed, previous + PROGRESSION_CONFIG.maximumDailyRise * elapsed); smoothed = Math.max(smoothed, previous - PROGRESSION_CONFIG.maximumDailyDecline * elapsed); }
+  const level = clamp(smoothed), stage = stageForLevel(level, qualifiesForOnePercent), nextMilestone = PROGRESSION_CONFIG.milestones.find((milestone) => milestone.level > level) ?? null;
+  return { level, rawLevel: index, index, status: distinctSnapshotDays < 7 ? "calibrating" : "active", stage, nextMilestone, averages: { days7: avg7, days28: avg28, days90: avg90 }, consistency, domainBalance, domainFloor, activeDomains: domainValues.length, activityDays90: activity.size, integrityFlags, limitingFactors: buildLimitingFactors({ distinctSnapshotDays, integrityFlags, consistency, domainFloor, activeDomains: domainValues.length, avg28, avg90, execution }), qualifiesForOnePercent, evidenceCap };
+}
+export function stageForLevel(level: number, currentOnePercent = false): ProgressionCalculation["stage"] { if (level >= 99 && currentOnePercent) return "1%"; if (level >= 90) return "Elite"; if (level >= 80) return "Alignment"; if (level >= 70) return "Momentum"; return "Foundation"; }
+export function detectIntegrityFlags(tasks: ProgressionTask[], now = new Date()): string[] {
+  const recent = tasks.filter((task) => ageDays(task.createdAt, now) < 28); if (!recent.length) return [];
+  const flags: string[] = [], byDay = new Map<string, number>(), titles = new Map<string, number>(); let completed = 0, fast = 0;
+  for (const task of recent) { const day = task.createdAt.slice(0, 10); byDay.set(day, (byDay.get(day) ?? 0) + 1); const title = task.title.toLowerCase().replace(/\s+/g, " ").trim(); titles.set(title, (titles.get(title) ?? 0) + 1); if (task.completedAt) { completed++; if ((new Date(task.completedAt).getTime() - new Date(task.createdAt).getTime()) / 1000 < PROGRESSION_CONFIG.integrity.fastCompletionSeconds) fast++; } }
+  if ([...byDay.values()].some((count) => count > PROGRESSION_CONFIG.integrity.dailyTaskLimit)) flags.push("excessive_trivial_tasks");
+  if (completed >= 5 && fast / completed > PROGRESSION_CONFIG.integrity.fastCompletionRatio) flags.push("rapid_create_complete");
+  if ([...titles.values()].some((count) => count > PROGRESSION_CONFIG.integrity.duplicateTitleLimit)) flags.push("duplicate_tasks");
+  return flags;
+}
+function weightedExecution(tasks: ProgressionTask[], now: Date) { const weights: Record<string, number> = { critical: 3, important: 2, optional: 1 }, recent = tasks.filter((task) => ageDays(task.createdAt, now) < 28); if (!recent.length) return null; const possible = recent.reduce((sum, task) => sum + (weights[task.tier] ?? 1), 0), done = recent.filter((task) => task.completedAt).reduce((sum, task) => sum + (weights[task.tier] ?? 1), 0); return clamp(done / possible * 100); }
+function domainAverages(rows: ProgressionSnapshot[]) { const values = new Map<string, number[]>(); for (const row of rows) for (const [key, value] of Object.entries(row.domains)) if (typeof value === "number" && Number.isFinite(value)) values.set(key, [...(values.get(key) ?? []), value]); return [...values.values()].map((items) => average(items)!).filter(Number.isFinite); }
+function average(values: number[]) { return values.length ? clamp(values.reduce((sum, value) => sum + value, 0) / values.length) : null; }
+function standardDeviation(values: number[]) { const mean = values.reduce((sum, value) => sum + value, 0) / values.length; return Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length); }
+function ageDays(value: string, now: Date) { return Math.max(0, Math.floor((now.getTime() - new Date(value.length === 10 ? `${value}T12:00:00Z` : value).getTime()) / DAY)); }
+function spanDays(rows: ProgressionSnapshot[], now: Date) { if (!rows.length) return 1; return Math.min(90, Math.max(1, Math.floor((now.getTime() - new Date(`${rows[0].date}T12:00:00Z`).getTime()) / DAY) + 1)); }
+function buildLimitingFactors(input: { distinctSnapshotDays: number; integrityFlags: string[]; consistency: number; domainFloor: number | null; activeDomains: number; avg28: number | null; avg90: number | null; execution: number | null }) { const factors: string[] = []; if (input.distinctSnapshotDays < 90) factors.push(`${90 - input.distinctSnapshotDays} more measured day${90 - input.distinctSnapshotDays === 1 ? "" : "s"} needed for full calibration`); if (input.activeDomains < 3) factors.push("Build reliable history in at least three active domains"); if (input.consistency < 90) factors.push(`90-day active-day consistency is ${input.consistency}%`); if (input.domainFloor !== null && input.domainFloor < 85) factors.push(`Lowest active domain is ${input.domainFloor}`); if ((input.avg28 ?? 0) < 95) factors.push("28-day performance is below the 1% operating range"); if ((input.avg90 ?? 0) < 93) factors.push("90-day performance is below the 1% operating range"); if ((input.execution ?? 100) < 80) factors.push("Priority-weighted execution needs more consistency"); if (input.integrityFlags.length) factors.push("Activity integrity checks need a clean window"); return factors.slice(0, 4); }

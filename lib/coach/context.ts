@@ -86,6 +86,7 @@ export function createCoachContextSnapshot(
     stable: {
       activeGoalCount: goalRows.length,
       progression: context.domains.progression.data,
+      latestAchievements: (context.domains.achievements.data?.unlocked ?? []).slice(0, 5).map((item) => ({ title: item.title, unlockedAt: item.unlockedAt })),
       preferences: {
         peakEnergy: context.profile.blueprint?.peakEnergy ?? null,
         protectedCommitments: context.profile.blueprint?.protectedCommitments ?? null,

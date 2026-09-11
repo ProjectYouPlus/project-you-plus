@@ -1,4 +1,7 @@
-export const ONE_PERCENT_BRAND_ASSET="/project-you-plus-logo.svg" as const;
-export type ProgressionStage="Foundation"|"Momentum"|"Alignment"|"Elite"|"1%";
-export type ProgressionAchievement={id:string;key:string;title:string;category:"score"|"milestone"|"behavior"|"elite";threshold:number|null;unlockedAt:string;metadata:Record<string,unknown>};
-export type ProgressionState={stage:ProgressionStage;currentScore:number;highestScore:number;coveragePct:number;sustainedHighDays:number;onePercentUnlocked:boolean;onePercentUnlockedAt:string|null;calibrationDays:number;contributingDomains:number;numericLevel:null;numericProgressionAvailable:false;achievements:ProgressionAchievement[];brandAsset:typeof ONE_PERCENT_BRAND_ASSET|null};
+import type { AchievementCategory, AchievementTier } from "@/lib/progression/achievements";
+export const ONE_PERCENT_BRAND_ASSET = "/project-you-plus-logo.svg" as const;
+export type ProgressionStage = "Foundation" | "Momentum" | "Alignment" | "Elite" | "1%";
+export type ProgressionAchievement = { id: string; key: string; title: string; description: string; category: AchievementCategory; tier: AchievementTier; unlockedAt: string; evidence: Record<string, unknown> };
+export type ProgressionMilestone = { id: string; level: number; stage: ProgressionStage; reachedAt: string };
+export type RecentWin = { id: string; title: string; occurredAt: string; type: string };
+export type ProgressionState = { currentScore: number; level: number; index: number; status: "calibrating" | "active"; stage: ProgressionStage; highestLevel: number; highestMilestone: number | null; nextMilestone: { level: number; stage: string } | null; limitingFactors: string[]; integrityFlags: string[]; averages: { days7: number | null; days28: number | null; days90: number | null }; consistency: number; domainBalance: number | null; domainFloor: number | null; coveragePct: number; activityDays90: number; calibrationDays:number; onePercentCurrent: boolean; onePercentUnlocked: boolean; onePercentUnlockedAt: string | null; achievements: ProgressionAchievement[]; milestones: ProgressionMilestone[]; recentWins: RecentWin[]; brandAsset: typeof ONE_PERCENT_BRAND_ASSET | null };

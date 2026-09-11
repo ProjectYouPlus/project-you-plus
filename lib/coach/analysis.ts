@@ -45,10 +45,24 @@ function analysisForIntent(snapshot: CoachContextSnapshot, message: string): Spe
     case "goal_blockers": return goalBlockers(snapshot);
     case "health_question": return healthStatus(snapshot);
     case "schedule_question": return tomorrowPlan(snapshot);
-    case "progress_question": return weeklyChange(snapshot);
+    case "progress_question": return progressionAnswer(snapshot, message);
     case "action_request": return requestedAction(snapshot, message);
     default: return todayFocus(snapshot);
   }
+}
+
+function progressionAnswer(snapshot: CoachContextSnapshot, message: string): SpecialistInsight[] {
+  const state = snapshot.stable.progression?.state;
+  if (!state) return [insight("progress", "Your progression level is still calibrating because no canonical progression state has been recorded yet.", [], 70, 35, 80, "Keep logging meaningful actions and open Progress & Achievements to calculate the first level.", "A level needs sustained history; the current score alone is not enough.", "Creates an evidence-backed baseline without inventing progress.", "low")];
+  const text = message.toLowerCase(), evidence: CoachEvidence[] = [{ key: "progression_level", value: state.level, sourceType: "user_progression", sourceId: "current" }];
+  if (text.includes("achievement") || text.includes("biggest win")) {
+    const latest = snapshot.stable.latestAchievements ?? [];
+    if (!latest.length) return [insight("progress", "No evidence-backed achievement is recorded yet.", evidence, 60, 25, 65, "Keep completing meaningful actions; Project You+ will unlock achievements only when their evidence is provable.", "Achievements are stored separately from score and cannot be inferred from activity volume alone.", "The next unlock will represent real behavior history.", "high")];
+    return [insight("progress", `${latest[0].title} is your latest recorded achievement${latest.length > 1 ? `, followed by ${latest.slice(1, 3).map((item) => item.title).join(" and ")}` : ""}.`, evidence, 80, 30, 75, "Use the underlying behavior as evidence of what is working; no extra activity is required for its own sake.", "These unlocks came from the canonical achievement record.", "Keeps attention on meaningful outcomes rather than collecting badges.", "high")];
+  }
+  if (text.includes("1%") || text.includes("one percent")) return [insight("progress", `You are Level ${state.level} — ${state.stage}. ${state.onePercentUnlocked ? (state.onePercentCurrent ? "You are currently operating at the 1% standard." : "You earned 1% historically, while your current operating level is lower.") : `The final 1% milestone is ${Math.max(0, 99-state.level)} levels away, with full calibration still required.`}`, evidence, 95, 35, 95, state.limitingFactors[0] ?? "Keep the strongest current behavior stable across the longer horizon.", "1% requires sustained 28 and 90-day performance, balance across active domains, high consistency, enough history, and clean integrity signals.", "Moves the slow progression signal without treating one strong day as qualification.", "high")];
+  if (text.includes("keeping") || text.includes("from") || text.includes("close") || text.includes("why")) return [insight("progress", `You are Level ${state.level} — ${state.stage}${state.nextMilestone ? `, moving toward ${state.nextMilestone}` : ""}. ${state.limitingFactors.length ? state.limitingFactors.join("; ") : "No limiting factor is currently stronger than the normal need to sustain this level."}`, evidence, 90, 40, 90, state.limitingFactors[0] ?? "Keep current commitments reliable across the next measured window.", "The level changes gradually from multi-horizon performance, consistency, balance, and priority-weighted execution.", "Improves the limiting evidence while preserving the separation between today's score and long-term progression.", "high")];
+  return [insight("progress", `Your current progression is Level ${state.level} — ${state.stage}. Your current score is ${state.currentScore}; it is a faster daily signal and is not your level.`, evidence, 85, 30, 85, state.nextMilestone ? `Keep the most reliable current behavior stable while moving toward Level ${state.nextMilestone}.` : "Maintain the standard across the longer horizon.", "Progression reflects sustained behavior rather than a single score.", "Builds dependable evidence for the next milestone.", "high")];
 }
 
 function todayFocus(snapshot: CoachContextSnapshot): SpecialistInsight[] {

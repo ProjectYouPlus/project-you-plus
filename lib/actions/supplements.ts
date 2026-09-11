@@ -9,6 +9,7 @@ import {
   supplementDays,
 } from "@/lib/health/schedule";
 import { refreshHealthViews } from "@/lib/health/refresh";
+import { refreshProgressionAfterMutation } from "@/lib/progression/service";
 
 export async function addSupplement(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -62,6 +63,7 @@ export async function logSupplementToday(supplementId: string) {
       { onConflict: "user_id,supplement_id,logged_on", ignoreDuplicates: true },
     );
   if (error) throw new Error(error.message);
+  await refreshProgressionAfterMutation();
   refreshHealthViews();
   revalidatePath("/supplements");
   revalidatePath("/health");

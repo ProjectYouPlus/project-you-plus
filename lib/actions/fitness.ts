@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildUserContext } from "@/lib/ai/context";
 import { runStructuredSpecialistTask } from "@/lib/ai/orchestrator";
 import { createRecommendation } from "@/lib/ai/recommendations";
+import { refreshProgressionAfterMutation } from "@/lib/progression/service";
 
 type Exercise = { name: string; sets: string; reps: string; rest?: string };
 type PlanSession = { key: string; day: string; dayIndex: number; title: string; focus: string; duration: number; exercises: Exercise[] };
@@ -20,6 +21,7 @@ export async function addWorkout(formData: FormData) {
   if (!user) return { error: "Sign in again." };
   const { error } = await supabase.from("workouts").insert({ user_id: user.id, title, type, duration_minutes: duration, source: "manual" });
   if (error) return { error: error.message };
+  await refreshProgressionAfterMutation();
   revalidatePath("/fitness"); revalidatePath("/health"); revalidatePath("/dashboard");
   return { error: null };
 }
@@ -85,6 +87,7 @@ export async function completeWorkoutPlanSession(planId: string, sessionKey: str
  const { updateWorkoutStatus } = await import("@/lib/actions/health-plan");
  const result=await updateWorkoutStatus(planId,sessionKey,"completed");
  if(result.error)throw new Error(result.error);
+ await refreshProgressionAfterMutation();
 }
 
 function normalizeSession(session: PlanSession, index: number, minutes: number, selectedDays:number[]): PlanSession {

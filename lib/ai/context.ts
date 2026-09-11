@@ -41,7 +41,7 @@ export interface UserContextDomains {
   recentScores: ContextDomain<Array<{ id: string; score: number; scoredOn: string; breakdown: Record<string, number> | null }>>;
   recentPerformance: ContextDomain<{ activeDays: number; completedTasks: number; workouts: number; habitLogDays: number }>;
   achievements: ContextDomain<{ completedChallenges: Array<{ id: string; title: string; points: number; endedOn: string }>; unlocked: Array<{ id:string; key:string; title:string; category:string; unlockedAt:string }> }>;
-  progression: ContextDomain<{ activeGoals: Array<{ id: string; title: string; progress: number; nextMilestone: number; deadline: string | null }>; state:null|{stage:string;currentScore:number;highestScore:number;coveragePct:number;sustainedHighDays:number;onePercentUnlocked:boolean} }>;
+  progression: ContextDomain<{ activeGoals: Array<{ id: string; title: string; progress: number; nextMilestone: number; deadline: string | null }>; state:null|{stage:string;level:number;status:string;currentScore:number;coveragePct:number;highestLevel:number;highestMilestone:number|null;nextMilestone:number|null;limitingFactors:string[];onePercentCurrent:boolean;onePercentUnlocked:boolean} }>;
   eventHistory: ContextDomain<BehaviorEventSummary>;
 }
 
@@ -73,7 +73,7 @@ type ContextSignals = {
   metricIds:string[];eventIds:string[];transactionIds:string[];nutritionIds:string[];workoutLogIds:string[];supplementIds:string[];supplementLogIds:string[];workScheduleIds:string[];accountIds:string[];habitLogIds:string[];recentHabitDays:string[];completedTaskIds:string[];behaviorEventIds:string[];
   recentScores:Array<{id:string;score:number;scoredOn:string;breakdown:Record<string,number>|null}>;completedChallenges:Array<{id:string;title:string;points:number;endedOn:string}>;
   behaviorSummary:BehaviorEventSummary|null;
-  progressionState:null|{stage:string;currentScore:number;highestScore:number;coveragePct:number;sustainedHighDays:number;onePercentUnlocked:boolean};unlockedAchievements:Array<{id:string;key:string;title:string;category:string;unlockedAt:string}>;
+  progressionState:null|{stage:string;level:number;status:string;currentScore:number;coveragePct:number;highestLevel:number;highestMilestone:number|null;nextMilestone:number|null;limitingFactors:string[];onePercentCurrent:boolean;onePercentUnlocked:boolean};unlockedAchievements:Array<{id:string;key:string;title:string;category:string;unlockedAt:string}>;
   windows:{week:{from:string;to:string};month:{from:string;to:string}};workoutsLast7Days:number;
   healthScoreDetails?:HealthScore;
   domainScores:{healthScore:number|null;financeScore:number|null;health:{training:number|null;diet:number|null;protocol:number|null;consistency:number|null}|null};
@@ -129,7 +129,7 @@ async function getLiveContext() {
     supabase.from("tasks").select("id,completed_at").not("completed_at","is",null).gte("completed_at",streakStart.toISOString()).limit(200),
     supabase.from("score_snapshots").select("id,score,breakdown,scored_on:captured_on").order("captured_on",{ascending:false}).limit(14),
     supabase.from("behavior_events").select("id,event_type,occurred_at,source_table,source_id,payload").gte("occurred_at",streakStart.toISOString()).order("occurred_at",{ascending:false}).limit(100),
-    supabase.from("user_progression").select("current_level,current_score,highest_score,coverage_pct,sustained_high_days,one_percent_unlocked").maybeSingle(),
+    supabase.from("user_progression").select("current_level,current_level_number,progression_status,current_score,coverage_pct,highest_level,highest_milestone,next_milestone,limiting_factors,one_percent_current,one_percent_unlocked").maybeSingle(),
     supabase.from("user_achievements").select("id,achievement_key,title,category,unlocked_at").order("unlocked_at",{ascending:false}).limit(30),
   ]);
 
@@ -178,7 +178,7 @@ async function getLiveContext() {
   const completedChallenges=(challengeMembersRes.data??[]).map((row:any)=>({id:String(row.challenges?.id??""),title:String(row.challenges?.title??""),points:Number(row.points||0),endedOn:String(row.challenges?.ends_on??""),status:String(row.challenges?.status??"")})).filter((row:any)=>row.id&&row.title&&row.status==="completed").map(({status:_,...row}:any)=>row);
   const behaviorRows=behaviorRes.data??[];const behaviorCounts=behaviorRows.reduce<Record<string,number>>((counts,row:any)=>{const type=String(row.event_type);counts[type]=(counts[type]??0)+1;return counts},{});
   const behaviorSummary:BehaviorEventSummary|null=behaviorRows.length?{windowDays:90,total:behaviorRows.length,counts:behaviorCounts,recent:behaviorRows.slice(0,30).map((row:any)=>({id:String(row.id),type:String(row.event_type),occurredAt:String(row.occurred_at),sourceTable:row.source_table?String(row.source_table):null,sourceId:row.source_id?String(row.source_id):null,payload:(row.payload??{}) as Record<string,unknown>}))}:null;
-  const progressionState=progressionRes.data?{stage:String(progressionRes.data.current_level),currentScore:Number(progressionRes.data.current_score),highestScore:Number(progressionRes.data.highest_score),coveragePct:Number(progressionRes.data.coverage_pct),sustainedHighDays:Number(progressionRes.data.sustained_high_days),onePercentUnlocked:Boolean(progressionRes.data.one_percent_unlocked)}:null;
+  const progressionState=progressionRes.data?{stage:String(progressionRes.data.current_level),level:Number(progressionRes.data.current_level_number),status:String(progressionRes.data.progression_status),currentScore:Number(progressionRes.data.current_score),coveragePct:Number(progressionRes.data.coverage_pct),highestLevel:Number(progressionRes.data.highest_level),highestMilestone:progressionRes.data.highest_milestone==null?null:Number(progressionRes.data.highest_milestone),nextMilestone:progressionRes.data.next_milestone==null?null:Number(progressionRes.data.next_milestone),limitingFactors:Array.isArray(progressionRes.data.limiting_factors)?progressionRes.data.limiting_factors.map(String):[],onePercentCurrent:Boolean(progressionRes.data.one_percent_current),onePercentUnlocked:Boolean(progressionRes.data.one_percent_unlocked)}:null;
   const unlockedAchievements=(achievementsRes.data??[]).map(row=>({id:String(row.id),key:String(row.achievement_key),title:String(row.title),category:String(row.category),unlockedAt:String(row.unlocked_at)}));
   const contextSignals={
     metricIds:(metricsRes.data??[]).map((row:any)=>String(row.id)), eventIds:(eventsRes.data??[]).map((row:any)=>String(row.id)), transactionIds:(transactionsRes.data??[]).map((row:any)=>String(row.id)),

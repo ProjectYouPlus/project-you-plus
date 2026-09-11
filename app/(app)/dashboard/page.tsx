@@ -8,6 +8,7 @@ import { getHabits } from "@/lib/data/habits";
 import { createClient } from "@/lib/supabase/server";
 import { TrajectoryCommandCenter, type DashboardDay, type DashboardTask } from "@/components/dashboard/trajectory-command-center";
 import type { Goal, Habit, Task } from "@/lib/types";
+import { getStoredProgression } from "@/lib/progression/service";
 
 type PlanSession = { key: string; day: string; dayIndex: number; title: string; focus?: string; duration: number; exercises?: Array<{name:string;sets:string;reps:string;rest?:string}> };
 type ActivePlan = TrainingPlan;
@@ -25,8 +26,8 @@ export default async function DashboardPage() {
   const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
   const currentStart = new Date(now); currentStart.setHours(0,0,0,0); currentStart.setDate(currentStart.getDate()-6);
 
-  const [goals, tasks, habits, live, healthOverview, financeOverview] = await Promise.all([
-    getGoals(), getTasks(), getHabits(), getLiveDashboardData(supabase, rangeStart, rangeEnd, profile.timezone), getHealthOverview(), getFinanceOverview(),
+  const [goals, tasks, habits, live, healthOverview, financeOverview, progression] = await Promise.all([
+    getGoals(), getTasks(), getHabits(), getLiveDashboardData(supabase, rangeStart, rangeEnd, profile.timezone), getHealthOverview(), getFinanceOverview(), getStoredProgression(),
   ]);
 
   const firstName=(profile.fullName??"You").split(" ")[0];
@@ -104,6 +105,7 @@ export default async function DashboardPage() {
     activeChallenges={live.activeChallenges}
     activeAlerts={live.activeAlerts}
     insight={insight}
+    progression={progression?{level:progression.level,stage:progression.stage,nextMilestone:progression.nextMilestone,achievementCount:progression.achievements.length}:null}
   />;
 }
 

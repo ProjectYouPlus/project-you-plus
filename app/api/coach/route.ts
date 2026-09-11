@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     try {
       const progression=await evaluateProgression(context);
       const progressionData=context.domains.progression.data??{activeGoals:[],state:null};
-      context.domains.progression={...context.domains.progression,availability:"available",reason:null,data:{...progressionData,state:{stage:progression.stage,currentScore:progression.currentScore,highestScore:progression.highestScore,coveragePct:progression.coveragePct,sustainedHighDays:progression.sustainedHighDays,onePercentUnlocked:progression.onePercentUnlocked}}};
+      context.domains.progression={...context.domains.progression,availability:"available",reason:null,data:{...progressionData,state:{stage:progression.stage,level:progression.level,status:progression.status,currentScore:progression.currentScore,coveragePct:progression.coveragePct,highestLevel:progression.highestLevel,highestMilestone:progression.highestMilestone,nextMilestone:progression.nextMilestone?.level??null,limitingFactors:progression.limitingFactors,onePercentCurrent:progression.onePercentCurrent,onePercentUnlocked:progression.onePercentUnlocked}}};
       const achievementData=context.domains.achievements.data??{completedChallenges:[],unlocked:[]};
       context.domains.achievements={...context.domains.achievements,availability:"available",reason:null,data:{...achievementData,unlocked:progression.achievements.map(item=>({id:item.id,key:item.key,title:item.title,category:item.category,unlockedAt:item.unlockedAt}))}};
       bundle.snapshot.stable.progression=context.domains.progression.data;

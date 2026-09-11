@@ -20,6 +20,13 @@ export function fallbackCoachReply(message: string, context: ProjectYouContext):
   const userContext=context as UserContext,domains=userContext.domains;
   const four=(observation:string,why:string,recommendation:string,impact:string)=>`Observation: ${observation}\n\nWhy it matters: ${why}\n\nRecommendation: ${recommendation}\n\nExpected impact: ${impact}`;
 
+  if(/\b(level|1%|one percent|achievement|milestone)\b/.test(m)){
+    const state=domains.progression.data?.state,achievements=domains.achievements.data?.unlocked??[];
+    if(!state)return four("Your progression level is still calibrating.","The current score alone cannot establish a sustained level.","Keep logging meaningful actions until a multi-day history is available.","Project You+ can establish a grounded level without guessing.");
+    if(m.includes("achievement"))return achievements.length?four(`${achievements[0].title} is your latest recorded achievement.`,"It is backed by the canonical achievement record.","Repeat the behavior that produced it only when it serves your plan.","Keeps progress tied to meaningful outcomes."):four("No evidence-backed achievement is recorded yet.","Project You+ does not award achievements from unproven activity.","Continue completing meaningful commitments.","The first unlock will have a provable date and source.");
+    return four(`You are Level ${state.level} — ${state.stage}. Your current score is ${state.currentScore}.`,state.limitingFactors.length?state.limitingFactors.join("; "):"Your level reflects sustained behavior across longer windows.",state.limitingFactors[0]??`Keep your current pattern stable toward Level ${state.nextMilestone??99}.`,"Improves long-term progression without treating one strong day as proof.");
+  }
+
   if((m.includes("focus")&&m.includes("today"))||m.includes("highest-leverage")){
     const rank={critical:0,important:1,optional:2};const task=context.tasks.filter(task=>!task.completedAt).sort((a,b)=>rank[a.tier]-rank[b.tier])[0];
     if(!task)return four("There is no unfinished task in your connected data.","Choosing a priority without a real action would be guesswork.","Add one concrete next action to your top active goal.","Coach can rank today from real commitments instead of assumptions.");

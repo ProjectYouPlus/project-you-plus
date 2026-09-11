@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
 import type { Tier } from "@/lib/types";
+import { refreshProgressionAfterMutation } from "@/lib/progression/service";
 
 export async function createTask(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
@@ -41,9 +42,11 @@ export async function toggleTaskComplete(taskId: string, completed: boolean) {
   const completedAt = completed ? new Date().toISOString() : null;
   const { error } = await supabase.from("tasks").update({ completed_at: completedAt }).eq("id", taskId).eq("user_id", user.id);
   if (error) throw new Error(error.message);
+  await refreshProgressionAfterMutation();
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
   revalidatePath("/review");
+  revalidatePath("/progress");
 }
 
 export async function deleteTask(taskId: string) {

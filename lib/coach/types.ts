@@ -98,6 +98,7 @@ export type CoachContextSnapshot = {
   stable: {
     activeGoalCount: number;
     progression: UserContext["domains"]["progression"]["data"];
+    latestAchievements?: Array<{ title: string; unlockedAt: string }>;
     preferences: {
       peakEnergy: string | null;
       protectedCommitments: string | null;
