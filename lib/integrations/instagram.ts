@@ -55,12 +55,13 @@ export async function exchangeInstagramCode(code: string) {
 
 export async function saveInstagramConnection(userId: string, token: { access_token: string; expires_in?: number; instagram_user_id: string }) {
   const profile = await instagramFetch<{ id: string; user_id?: string; username?: string; name?: string; account_type?: string }>(
-    `/${token.instagram_user_id}?fields=id,user_id,username,name,account_type`, token.access_token,
+    `/me?fields=id,user_id,username,name,account_type`, token.access_token,
   );
+  const instagramUserId = String(profile.user_id || profile.id || token.instagram_user_id);
   await saveIntegrationSecret(userId, "instagram", {
     access_token: token.access_token,
     expires_at: Date.now() + Number(token.expires_in || 5184000) * 1000,
-    instagram_user_id: token.instagram_user_id,
+    instagram_user_id: instagramUserId,
   });
   const admin = createAdminClient();
   const { error } = await admin.from("integrations").upsert({
@@ -68,7 +69,7 @@ export async function saveInstagramConnection(userId: string, token: { access_to
     provider: "instagram",
     status: "connected",
     connected_at: new Date().toISOString(),
-    metadata: { instagram_user_id: token.instagram_user_id, username: profile.username || null, account_type: profile.account_type || null, scopes: INSTAGRAM_SCOPES, last_synced_at: null },
+    metadata: { instagram_user_id: instagramUserId, username: profile.username || null, account_type: profile.account_type || null, scopes: INSTAGRAM_SCOPES, last_synced_at: null },
   }, { onConflict: "user_id,provider" });
   if (error) throw error;
   return profile;
