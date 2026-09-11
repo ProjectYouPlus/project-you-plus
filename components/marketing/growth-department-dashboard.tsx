@@ -58,7 +58,7 @@ export function GrowthDepartmentDashboard() {
       kind, objective,
       context: "Instagram-first. Premium AI life operating system. Founder-led product storytelling. Optimize for curiosity, shares, saves, qualified follows and waitlist intent.",
     });
-    if (result) { setNotice(kind === "hype" ? "Hype concepts entered the real content, experiment and opportunity queues." : "Atlas created today’s plan and assigned the Growth Department."); setTab(kind === "hype" ? "content" : "overview"); }
+    if (result) { setNotice(result.reused ? "Today’s Morning Autopilot plan is already ready." : kind === "hype" ? "Hype concepts entered the real content, experiment and opportunity queues." : "Atlas created today’s plan and assigned the Growth Department."); setTab(kind === "hype" ? "content" : "overview"); }
   }
 
   async function runAgent(agentId: MarketingAgentId) {

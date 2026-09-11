@@ -6,6 +6,12 @@ type TextRequest = {
   model?: string;
   maxOutputTokens?: number;
   reasoningEffort?: "none" | "low" | "medium" | "high";
+  timeoutMs?: number;
+};
+
+type StructuredTextRequest<T> = TextRequest & {
+  schemaName: string;
+  schema: Record<string, unknown>;
 };
 
 type StructuredVisionRequest<T> = {
@@ -19,6 +25,8 @@ type StructuredVisionRequest<T> = {
 };
 
 type OpenAIResponse = {
+  status?: string;
+  incomplete_details?: { reason?: string };
   output?: Array<{
     type?: string;
     content?: Array<{ type?: string; text?: string; refusal?: string }>;
@@ -44,6 +52,7 @@ export async function callOpenAIText({
   model = smartOpenAIModel(),
   maxOutputTokens = 800,
   reasoningEffort = "low",
+  timeoutMs = 60_000,
 }: TextRequest): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
@@ -63,13 +72,62 @@ export async function callOpenAIText({
       store: false,
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   const data = (await response.json()) as OpenAIResponse;
   if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${data.error?.message ?? "request failed"}`);
+  assertComplete(data);
   const text = extractOutputText(data);
   if (!text) throw new Error("OpenAI returned no text content");
   return text;
+}
+
+export async function callOpenAIStructuredText<T>({
+  instructions,
+  messages,
+  schemaName,
+  schema,
+  model = smartOpenAIModel(),
+  maxOutputTokens = 1600,
+  reasoningEffort = "low",
+  timeoutMs = 60_000,
+}: StructuredTextRequest<T>): Promise<{ value: T; raw: string }> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      instructions,
+      input: messages,
+      text: {
+        format: {
+          type: "json_schema",
+          name: schemaName,
+          strict: true,
+          schema,
+        },
+      },
+      max_output_tokens: maxOutputTokens,
+      reasoning: { effort: reasoningEffort },
+      store: false,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  const data = (await response.json()) as OpenAIResponse;
+  if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${data.error?.message ?? "request failed"}`);
+  assertComplete(data);
+  const raw = extractOutputText(data);
+  if (!raw) throw new Error("OpenAI returned no structured content");
+  return { value: JSON.parse(raw) as T, raw };
 }
 
 export async function callOpenAIStructuredVision<T>({
@@ -119,9 +177,17 @@ export async function callOpenAIStructuredVision<T>({
 
   const data = (await response.json()) as OpenAIResponse;
   if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${data.error?.message ?? "request failed"}`);
+  assertComplete(data);
   const text = extractOutputText(data);
   if (!text) throw new Error("OpenAI returned no structured content");
   return JSON.parse(text) as T;
+}
+
+function assertComplete(data: OpenAIResponse) {
+  if (data.status === "incomplete") {
+    const reason = data.incomplete_details?.reason || "unknown reason";
+    throw new Error(`OpenAI response was incomplete (${reason}).`);
+  }
 }
 
 function extractOutputText(data: OpenAIResponse) {
