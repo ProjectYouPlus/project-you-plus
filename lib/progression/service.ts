@@ -17,26 +17,34 @@ export async function evaluateProgression(context: UserContext): Promise<Progres
   const currentScore = context.score.score.score, coveragePct = context.score.coveragePct;
   const breakdown = { ...context.score.score.breakdown, health: context.domains.health.data?.score ?? null, finance: context.domains.finance.data?.score ?? null };
   await admin.from("score_snapshots").upsert({ user_id: user.id, score: currentScore, coverage_pct: coveragePct, breakdown, captured_on: today }, { onConflict: "user_id,captured_on" });
-  const [snapshotsRes, eventsRes, tasksRes, goalsRes, reviewsRes, profileRes, budgetsRes, txRes, previousRes] = await Promise.all([
+  const [snapshotsRes, eventsRes, tasksRes, goalsRes, reviewsRes, workoutPlansRes, workoutLogsRes, budgetsRes, txRes, previousRes] = await Promise.all([
     admin.from("score_snapshots").select("score,coverage_pct,breakdown,captured_on").eq("user_id", user.id).gte("captured_on", isoDate(start)).order("captured_on"),
     admin.from("behavior_events").select("id,event_type,occurred_at,source_table,source_id,payload").eq("user_id", user.id).gte("occurred_at", start.toISOString()).order("occurred_at"),
     admin.from("tasks").select("id,title,tier,created_at,completed_at").eq("user_id", user.id).gte("created_at", start.toISOString()),
     admin.from("goals").select("id,status,progress,created_at,updated_at,completed_at").eq("user_id", user.id),
     admin.from("weekly_reviews").select("id,created_at,week_start").eq("user_id", user.id).order("created_at"),
-    admin.from("profiles").select("created_at").eq("id", user.id).maybeSingle(),
+    admin.from("workout_plans").select("id,days_per_week").eq("user_id", user.id),
+    admin.from("workout_plan_logs").select("plan_id,session_key,completed_on,status").eq("user_id", user.id).eq("status", "completed").gte("completed_on", isoDate(start)),
     admin.from("budgets").select("monthly_limit,period_start").eq("user_id", user.id),
     admin.from("transactions").select("amount,occurred_at").eq("user_id", user.id).gte("occurred_at", startOfPriorMonth(now).toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
     admin.from("user_progression").select("*").eq("user_id", user.id).maybeSingle(),
   ]);
-  throwErrors(snapshotsRes.error, eventsRes.error, tasksRes.error, previousRes.error);
+  throwErrors(snapshotsRes.error, eventsRes.error, tasksRes.error, workoutPlansRes.error, workoutLogsRes.error, previousRes.error);
   const snapshots: ProgressionSnapshot[] = (snapshotsRes.data ?? []).map((row) => ({ date: String(row.captured_on), score: Number(row.score), coveragePct: Number(row.coverage_pct), domains: scoreDomains(row.breakdown) }));
   const events = eventsRes.data ?? [], activeDays = [...new Set(events.filter((event) => COMPLETIONS.has(event.event_type)).map((event) => String(event.occurred_at).slice(0, 10)))];
   const tasks: ProgressionTask[] = (tasksRes.data ?? []).map((row) => ({ title: String(row.title), tier: String(row.tier), createdAt: String(row.created_at), completedAt: row.completed_at ? String(row.completed_at) : null }));
   const previous = previousRes.data;
   const calculation = calculateProgression({ snapshots, activityDays: activeDays, tasks, previousLevel: previous?.current_level_number == null ? null : Number(previous.current_level_number), previousCalculatedOn: previous?.calculated_at ?? null, now });
   const goalDates = (goalsRes.data ?? []).filter((goal) => goal.status === "completed" || Number(goal.progress) >= 100).map((goal) => String(goal.completed_at ?? goal.updated_at ?? goal.created_at));
-  const workoutDays = events.filter((event) => event.event_type === "workout.completed").map((event) => String(event.occurred_at).slice(0, 10));
-  const qualified = qualifyAchievements({ activeDays, goalCompletions: goalDates, workoutDays, reviewDates: (reviewsRes.data ?? []).map((row) => String(row.created_at ?? row.week_start)), onTargetBudgetMonths: onTargetBudgetMonths(budgetsRes.data ?? [], txRes.data ?? [], now), profileCreatedAt: profileRes.data?.created_at ?? null, now });
+  const qualified = qualifyAchievements({
+    activeDays,
+    goalCompletions: goalDates,
+    workoutCompletions: (workoutLogsRes.data ?? []).map((row) => ({ date: String(row.completed_on), planId: String(row.plan_id), sessionKey: String(row.session_key) })),
+    workoutPlanTargets: Object.fromEntries((workoutPlansRes.data ?? []).map((row) => [String(row.id), Number(row.days_per_week)])),
+    reviewDates: (reviewsRes.data ?? []).map((row) => String(row.created_at ?? row.week_start)),
+    onTargetBudgetMonths: onTargetBudgetMonths(budgetsRes.data ?? [], txRes.data ?? [], now),
+    scoreSnapshots: snapshots.map((row) => ({ date: row.date, score: row.score, coveragePct: row.coveragePct })),
+  });
   for (const achievement of qualified) await unlockAchievement(admin, user.id, achievement);
   const previousHighest = Number(previous?.highest_level ?? previous?.current_level_number ?? 0), highestLevel = Math.max(previousHighest, calculation.level), oldHighestMilestone = nullableNumber(previous?.highest_milestone);
   const reached = PROGRESSION_CONFIG.milestones.filter((milestone) => calculation.level >= milestone.level);

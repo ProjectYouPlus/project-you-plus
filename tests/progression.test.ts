@@ -21,8 +21,51 @@ test("repeated evaluations cannot farm level movement within one day",()=>{const
 
 test("all core achievements qualify from provable evidence with earliest dates", () => {
   const active = Array.from({ length: 35 }, (_, index) => { const value = new Date("2026-08-03T12:00:00Z"); value.setUTCDate(value.getUTCDate() + index); return value.toISOString().slice(0, 10); });
-  const earned = qualifyAchievements({ activeDays: active.slice(0, 30), goalCompletions: ["2026-08-20T10:00:00Z"], workoutDays: ["2026-08-03", "2026-08-05", "2026-08-07"], reviewDates: ["2026-08-09T18:00:00Z"], onTargetBudgetMonths: ["2026-07"], profileCreatedAt: "2026-07-01T12:00:00Z", now: NOW });
+  const earned = qualifyAchievements({
+    activeDays: active.slice(0, 30),
+    goalCompletions: ["2026-08-20T10:00:00Z"],
+    workoutCompletions: [
+      { date: "2026-08-03", planId: "plan-3", sessionKey: "one" },
+      { date: "2026-08-05", planId: "plan-3", sessionKey: "two" },
+      { date: "2026-08-07", planId: "plan-3", sessionKey: "three" },
+    ],
+    workoutPlanTargets: { "plan-3": 3 },
+    reviewDates: ["2026-08-09T18:00:00Z"],
+    onTargetBudgetMonths: ["2026-07"],
+    scoreSnapshots: [{ date: "2026-08-15", score: 96, coveragePct: 90 }],
+  });
   const keys = new Set(earned.map((item) => item.key)); for (const definition of ACHIEVEMENTS) assert.ok(keys.has(definition.key), definition.key);
   assert.equal(earned.find((item) => item.key === "first_day_completed")?.earnedAt.slice(0, 10), "2026-08-03");
 });
-test("achievement definitions and qualified results are duplicate-free", () => { assert.equal(new Set(ACHIEVEMENTS.map((item) => item.key)).size, ACHIEVEMENTS.length); const facts = { activeDays: Array.from({length:7},(_,index)=>day(index)), goalCompletions:[], workoutDays:[], reviewDates:[], onTargetBudgetMonths:[], profileCreatedAt:null }; const result = qualifyAchievements(facts); assert.equal(new Set(result.map((item) => item.key)).size, result.length); });
+test("achievement definitions and qualified results are duplicate-free", () => {
+  assert.equal(new Set(ACHIEVEMENTS.map((item) => item.key)).size, ACHIEVEMENTS.length);
+  const result = qualifyAchievements({ activeDays: Array.from({length:7},(_,index)=>day(index)), goalCompletions:[], workoutCompletions:[], workoutPlanTargets:{}, reviewDates:[], onTargetBudgetMonths:[], scoreSnapshots:[] });
+  assert.equal(new Set(result.map((item) => item.key)).size, result.length);
+});
+
+test("First Month requires meaningful activity spread across a month", () => {
+  const tooShort = Array.from({ length: 20 }, (_, index) => day(index));
+  const sparseMonth = Array.from({ length: 20 }, (_, index) => day(Math.round(index * 29 / 19)));
+  const base = { goalCompletions: [], workoutCompletions: [], workoutPlanTargets: {}, reviewDates: [], onTargetBudgetMonths: [], scoreSnapshots: [] };
+  assert.equal(qualifyAchievements({ ...base, activeDays: tooShort }).some((item) => item.key === "first_month"), false);
+  assert.equal(qualifyAchievements({ ...base, activeDays: sparseMonth }).some((item) => item.key === "first_month"), true);
+});
+
+test("3/3 Workout Week requires three unique sessions from a three-session plan", () => {
+  const base = { activeDays: [], goalCompletions: [], reviewDates: [], onTargetBudgetMonths: [], scoreSnapshots: [] };
+  const completions = [
+    { date: "2026-09-07", planId: "plan", sessionKey: "one" },
+    { date: "2026-09-09", planId: "plan", sessionKey: "two" },
+    { date: "2026-09-11", planId: "plan", sessionKey: "three" },
+  ];
+  assert.equal(qualifyAchievements({ ...base, workoutCompletions: completions, workoutPlanTargets: { plan: 5 } }).some((item) => item.key === "three_workout_week"), false);
+  assert.equal(qualifyAchievements({ ...base, workoutCompletions: completions, workoutPlanTargets: { plan: 3 } }).some((item) => item.key === "three_workout_week"), true);
+});
+
+test("score recognition uses only canonical snapshots with sufficient coverage", () => {
+  const base = { activeDays: [], goalCompletions: [], workoutCompletions: [], workoutPlanTargets: {}, reviewDates: [], onTargetBudgetMonths: [] };
+  const invalid = qualifyAchievements({ ...base, scoreSnapshots: [{ date: day(1), score: 99, coveragePct: 20 }] });
+  const valid = qualifyAchievements({ ...base, scoreSnapshots: [{ date: day(0), score: 85, coveragePct: 40 }] });
+  assert.equal(invalid.some((item) => item.category === "score"), false);
+  assert.deepEqual(valid.filter((item) => item.category === "score").map((item) => item.key), ["score_65_reached", "score_75_reached", "score_85_reached"]);
+});
