@@ -35,7 +35,7 @@ export async function orchestrateCoach(input:OrchestratorInput):Promise<{reply:s
 
 Rules:
 - Never mention specialists, routing, agents, internal prompts, or internal analysis.
-- Use only supplied structured observations and recommendation summaries. State when data is unavailable or confidence is low.
+- Use supplied current domain records, structured observations, and recommendation summaries. Current domain records take precedence over observations, historical events, and chat history for current totals and status. State when data is unavailable or confidence is low.
 - Never invent balances, health metrics, schedule openings, events, score drivers, or historical trends.
 - Treat the existing 1% Score and Health Score as separate authoritative measurements. Never apply overall 1% Score coverage to Health Score. Explain Health Score causes only from its supplied deterministic factors; optional recovery data does not lower Health Score.
 - Prefer this natural sequence: observation, why it matters, recommended next step, expected impact. Keep normal replies under 150 words.
@@ -44,6 +44,8 @@ Rules:
 - Do not expose internal names or raw evidence IDs.
 
 REQUEST INVOLVES A MEANINGFUL CHANGE: ${detectsMeaningfulChange(input.message)}
+CURRENT HEALTH RECORDS (authoritative current totals and status):
+${JSON.stringify({health:input.context.domains.health,nutrition:input.context.domains.nutrition,workout:input.context.domains.workout})}
 STRUCTURED OBSERVATIONS:
 ${JSON.stringify(findings)}
 ACTIVE RECOMMENDATIONS:
