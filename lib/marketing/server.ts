@@ -1,18 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 
-export function marketingOwnerEmails() {
-  return (process.env.PROJECT_YOU_OWNER_EMAILS || "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 export async function requireMarketingOwner() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const email = user?.email?.toLowerCase();
-  const allowed = Boolean(user && email && marketingOwnerEmails().includes(email));
-  return { allowed, user, supabase };
+  if (!user) return { allowed: false, user: null, supabase };
+
+  const { data: admin } = await supabase
+    .from("admin_users")
+    .select("active")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .maybeSingle();
+
+  return { allowed: Boolean(admin), user, supabase };
 }
 
 export type MarketingMetric = {
