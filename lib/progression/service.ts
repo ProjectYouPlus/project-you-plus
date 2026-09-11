@@ -6,6 +6,8 @@ import { calculateProgression, type ProgressionSnapshot, type ProgressionTask } 
 import { ACHIEVEMENTS, qualifyAchievements } from "./achievements";
 import { PROGRESSION_CONFIG } from "./config";
 import { ONE_PERCENT_BRAND_ASSET, type ProgressionAchievement, type ProgressionMilestone, type ProgressionState, type RecentWin } from "@/lib/types/progression";
+import { dedupeTransactions, normalizedTransactionType } from "@/lib/finance/overview";
+import type { FinanceTransaction } from "@/lib/finance/types";
 
 const COMPLETIONS = new Set(["task.completed", "habit.completed", "workout.completed"]);
 const WIN_TYPES = new Set(["achievement.unlocked", "milestone.unlocked", "progression.personal_best", "progression.one_percent_earned", "finance.goal_completed"]);
@@ -26,7 +28,7 @@ export async function evaluateProgression(context: UserContext): Promise<Progres
     admin.from("workout_plans").select("id,days_per_week").eq("user_id", user.id),
     admin.from("workout_plan_logs").select("plan_id,session_key,completed_on,status").eq("user_id", user.id).eq("status", "completed").gte("completed_on", isoDate(start)),
     admin.from("budgets").select("monthly_limit,period_start").eq("user_id", user.id),
-    admin.from("transactions").select("amount,occurred_at").eq("user_id", user.id).gte("occurred_at", start.toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
+    admin.from("transactions").select("id,account_id,amount,category,original_category,merchant,occurred_at,pending,transaction_type,provider_transaction_id,pending_transaction_id").eq("user_id", user.id).gte("occurred_at", start.toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
     admin.from("user_progression").select("*").eq("user_id", user.id).maybeSingle(),
   ]);
   throwErrors(snapshotsRes.error, eventsRes.error, tasksRes.error, workoutPlansRes.error, workoutLogsRes.error, previousRes.error);
@@ -42,7 +44,7 @@ export async function evaluateProgression(context: UserContext): Promise<Progres
     workoutCompletions: (workoutLogsRes.data ?? []).map((row) => ({ date: String(row.completed_on), planId: String(row.plan_id), sessionKey: String(row.session_key) })),
     workoutPlanTargets: Object.fromEntries((workoutPlansRes.data ?? []).map((row) => [String(row.id), Number(row.days_per_week)])),
     reviewDates: (reviewsRes.data ?? []).map((row) => String(row.created_at ?? row.week_start)),
-    onTargetBudgetMonths: onTargetBudgetMonths(budgetsRes.data ?? [], txRes.data ?? [], now),
+    onTargetBudgetMonths: onTargetBudgetMonths(budgetsRes.data ?? [], (txRes.data ?? []) as FinanceTransaction[], now),
     scoreSnapshots: snapshots.map((row) => ({ date: row.date, score: row.score, coveragePct: row.coveragePct })),
   });
   for (const achievement of qualified) await unlockAchievement(admin, user.id, achievement);
@@ -89,7 +91,7 @@ async function unlockAchievement(admin: ReturnType<typeof createAdminClient>, us
 async function recordMilestone(admin: ReturnType<typeof createAdminClient>, userId: string, level: number, stage: string, now: Date, index: number) { const { data } = await admin.from("progression_milestones").upsert({ user_id: userId, level, stage, reached_at: now.toISOString(), evidence: { progressionIndex: index } }, { onConflict: "user_id,level", ignoreDuplicates: true }).select("id,reached_at").maybeSingle(); if (data) await event(admin, userId, "milestone.unlocked", `milestone.unlocked:progression:${level}`, data.reached_at, { level, stage, title: `${level} — ${stage}` }); }
 async function event(admin: ReturnType<typeof createAdminClient>, userId: string, eventType: string, dedupeKey: string, occurredAt: string, payload: Record<string, unknown>) { await admin.from("behavior_events").upsert({ user_id: userId, event_type: eventType, occurred_at: occurredAt, source_table: "user_progression", source_id: null, dedupe_key: dedupeKey, payload }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true }); }
 function scoreDomains(value: unknown) { const row = value && typeof value === "object" ? value as Record<string, unknown> : {}, result: Record<string, number> = {}; for (const [key, item] of Object.entries(row)) if (typeof item === "number" && Number.isFinite(item) && key !== "financeScore") result[key] = item; return result; }
-function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_start: string }>, transactions: Array<{ amount: unknown; occurred_at: string }>, now: Date) {
+function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_start: string }>, transactions: FinanceTransaction[], now: Date) {
   const currentMonth = startOfMonth(now).toISOString().slice(0, 7);
   const limits = new Map<string, number>();
   for (const budget of budgets) {
@@ -99,9 +101,15 @@ function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_st
   }
   const qualified: string[] = [];
   for (const [month, limit] of limits) {
-    const rows = transactions.filter((row) => String(row.occurred_at).slice(0, 7) === month);
-    const spend = Math.abs(rows.filter((row) => Number(row.amount) < 0).reduce((sum, row) => sum + Number(row.amount), 0));
-    if (limit > 0 && rows.length > 0 && spend <= limit) qualified.push(month);
+    const rows = dedupeTransactions(transactions).filter((row) => !row.pending && String(row.occurred_at).slice(0, 7) === month);
+    const meaningful = rows.filter((row) => ["expense", "refund", "income"].includes(normalizedTransactionType(row)));
+    const spend = Math.max(0, meaningful.reduce((sum, row) => {
+      const type = normalizedTransactionType(row);
+      if (type === "expense") return sum + Math.max(0, -Number(row.amount));
+      if (type === "refund") return sum - Math.max(0, Number(row.amount));
+      return sum;
+    }, 0));
+    if (limit > 0 && meaningful.length > 0 && spend <= limit) qualified.push(month);
   }
   return qualified.sort();
 }
