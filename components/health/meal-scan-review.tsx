@@ -180,7 +180,12 @@ export function MealScanReview({
   if (stage === "capture") {
     return (
       <div className="space-y-4">
-        <label className="py-glass-hero py-pressable flex min-h-[330px] cursor-pointer flex-col items-center justify-center p-7 text-center">
+        <label role="button" tabIndex={0} aria-label="Open camera" onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            inputRef.current?.click();
+          }
+        }} className="py-glass-hero py-pressable flex min-h-[330px] cursor-pointer flex-col items-center justify-center p-7 text-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/[.06] text-[28px] text-white">
             ◎
           </span>
@@ -201,7 +206,12 @@ export function MealScanReview({
             onChange={(event) => void chooseFile(event.target.files?.[0])}
           />
         </label>
-        <label className="py-button-secondary flex min-h-[44px] cursor-pointer items-center justify-center">
+        <label role="button" tabIndex={0} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.currentTarget.querySelector("input")?.click();
+          }
+        }} className="py-button-secondary flex min-h-[44px] cursor-pointer items-center justify-center">
           Choose photo
           <input
             aria-label="Choose meal photo"
@@ -318,6 +328,7 @@ export function MealScanReview({
           >
             <div className="flex items-center gap-2">
               <input
+                aria-label={`Food ${index + 1} name`}
                 value={food.name}
                 onChange={(event) =>
                   updateFood(index, "name", event.target.value)
