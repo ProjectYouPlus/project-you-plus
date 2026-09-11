@@ -1,0 +1,15 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { addBill, setBillPaid } from "@/lib/actions/bills";
+
+type Bill = { id: string; name: string; amount: number; due_date: string; paid: boolean };
+
+export function BillPlanner({ bills }: { bills: Bill[] }) {
+  const [open, setOpen] = useState(false); const [pending, startTransition] = useTransition(); const [message, setMessage] = useState<string | null>(null);
+  function submit(formData: FormData) { setMessage(null); startTransition(() => { void (async () => { const result = await addBill(formData); if (result.error) setMessage(result.error); else { setOpen(false); setMessage(null); } })(); }); }
+  return <section className="mt-7"><div className="mb-3 flex items-end justify-between"><div><div className="text-[11px] text-text-3">Upcoming</div><h2 className="m-0 mt-1 text-[21px] font-semibold tracking-[-.03em] text-text-1">Bills to protect</h2></div><button onClick={() => setOpen(v => !v)} className="text-[11px] font-semibold text-accent-text">{open ? "Close" : "+ Add bill"}</button></div>
+    {open && <form action={submit} className="py-glass-soft mb-3 grid gap-2.5 p-4 sm:grid-cols-[1fr_110px_150px_auto]"><input name="name" required placeholder="Bill name" className="py-input min-h-[44px] py-2 text-[13px]"/><input name="amount" required min="0" step="0.01" type="number" placeholder="Amount" className="py-input min-h-[44px] py-2 text-[13px]"/><input name="dueDate" required type="date" className="py-input min-h-[44px] py-2 text-[13px]"/><button disabled={pending} className="py-button-primary min-h-[44px] disabled:opacity-50">{pending ? "Saving…" : "Save"}</button>{message&&<p className="m-0 text-[11px] text-danger sm:col-span-4">{message}</p>}</form>}
+    {bills.length ? <div className="py-glass-soft divide-y divide-white/[.055] px-4">{bills.map(bill => <div key={bill.id} className="flex items-center gap-3 py-3.5"><button type="button" disabled={pending} onClick={() => startTransition(() => { void setBillPaid(bill.id, !bill.paid).then((result) => setMessage(result.error)); })} aria-label={bill.paid ? `Mark ${bill.name} unpaid` : `Mark ${bill.name} paid`} className={`flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-bold ${bill.paid ? "bg-positive-soft text-positive" : "bg-warn-soft text-warn"}`}>{bill.paid ? "✓" : "$"}</button><span className="min-w-0 flex-1"><span className={`block truncate text-[13px] font-semibold ${bill.paid ? "text-text-3 line-through" : "text-text-1"}`}>{bill.name}</span><span className="mt-0.5 block text-[10px] text-text-3">{bill.paid ? "Paid" : "Due"} {new Date(`${bill.due_date}T12:00:00`).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span></span><span className="text-[12px] font-semibold text-text-1">{new Intl.NumberFormat(undefined,{style:"currency",currency:"USD"}).format(Number(bill.amount))}</span></div>)}</div> : <div className="py-glass-soft p-4 text-[12px] text-text-3">No bills are tracked. Add one to include upcoming obligations in cash-flow guidance.</div>}
+  </section>;
+}

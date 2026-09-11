@@ -26,7 +26,8 @@ export function PlaidLinkButton() {
       if (!tokenResponse.ok || !tokenData.linkToken) throw new Error(tokenData.error || "Could not start Plaid Link.");
       if (!window.Plaid) throw new Error("Plaid Link did not load.");
 
-      const handler = window.Plaid.create({
+      let handler: { open: () => void; destroy: () => void } | null = null;
+      handler = window.Plaid.create({
         token: tokenData.linkToken,
         onSuccess: (publicToken) => {
           setStatus("syncing");
@@ -36,18 +37,19 @@ export function PlaidLinkButton() {
               const data = await response.json() as { error?: string };
               if (!response.ok) throw new Error(data.error || "Could not sync the connected account.");
               setMessage("Connected. Your accounts are syncing into Project You+.");
+              handler?.destroy();
               router.push("/money?connected=plaid");
               router.refresh();
             } catch (error) {
               setMessage(error instanceof Error ? error.message : "Could not finish the bank connection.");
               setStatus("idle");
+              handler?.destroy();
             }
           })();
         },
-        onExit: () => setStatus("idle"),
+        onExit: () => { setStatus("idle"); handler?.destroy(); },
       });
       handler.open();
-      setStatus("idle");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not start the secure bank connection.");
       setStatus("idle");

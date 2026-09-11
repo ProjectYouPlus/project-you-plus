@@ -15,8 +15,11 @@ type PlaidTransaction = {
   merchant_name?: string | null;
   name?: string | null;
   category?: string[] | null;
+  personal_finance_category?: { primary?: string | null; detailed?: string | null } | null;
   date: string;
   pending: boolean;
+  pending_transaction_id?: string | null;
+  iso_currency_code?: string | null;
 };
 
 type PlaidHolding = {
@@ -34,7 +37,7 @@ export function isPlaidConfigured() {
 }
 
 export async function createPlaidLinkToken(userId: string) {
-  const products = (process.env.PLAID_PRODUCTS || "transactions,investments").split(",").map((item) => item.trim()).filter(Boolean);
+  const products = (process.env.PLAID_PRODUCTS || "transactions").split(",").map((item) => item.trim()).filter(Boolean);
   return plaidRequest<{ link_token: string; expiration: string }>("/link/token/create", {
     user: { client_user_id: userId },
     client_name: "Project You+",
@@ -52,6 +55,13 @@ export async function exchangePlaidPublicToken(publicToken: string) {
 
 export async function getPlaidAccounts(accessToken: string) {
   return plaidRequest<{ accounts: PlaidAccount[]; item: { institution_id?: string | null } }>("/accounts/get", { access_token: accessToken });
+}
+
+export async function getPlaidInstitution(institutionId: string) {
+  return plaidRequest<{ institution: { name?: string | null } }>("/institutions/get_by_id", {
+    institution_id: institutionId,
+    country_codes: ["US"],
+  });
 }
 
 export async function syncPlaidTransactions(accessToken: string, initialCursor?: string | null) {
@@ -75,6 +85,10 @@ export async function syncPlaidTransactions(accessToken: string, initialCursor?:
 
 export async function getPlaidHoldings(accessToken: string) {
   return plaidRequest<{ accounts: PlaidAccount[]; holdings: PlaidHolding[]; securities: PlaidSecurity[] }>("/investments/holdings/get", { access_token: accessToken });
+}
+
+export async function removePlaidItem(accessToken: string) {
+  return plaidRequest<{ request_id: string }>("/item/remove", { access_token: accessToken });
 }
 
 async function plaidRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {

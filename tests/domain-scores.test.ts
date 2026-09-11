@@ -9,6 +9,6 @@ test("does not invent scores when their sources failed",()=>{
 
 test("calculates finance score from the same inputs used by dashboard and Coach",()=>{
  const result=calculateDomainScores({now:new Date("2026-09-11T12:00:00Z"),plan:null,planLogs:[],nutritionLogs:[],supplements:[],supplementLogs:[],accounts:[{balance:1000,account_type:"checking"}],transactions:[{amount:2000,occurred_at:"2026-09-01T12:00:00Z"},{amount:-500,occurred_at:"2026-09-05T12:00:00Z"}],budgets:[{monthly_limit:1000}],healthSourcesAvailable:true,financeSourcesAvailable:true});
- assert.equal(result.financeScore,82);
- assert.deepEqual(result.finance,{budget:75,cashFlow:75,savings:100,consistency:83,spendingOnTarget:false});
+ assert.equal(result.financeScore,86);
+ assert.deepEqual(result.finance,{budget:64,cashFlow:100,savings:100,consistency:82,spendingOnTarget:false});
 });

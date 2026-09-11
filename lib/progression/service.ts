@@ -9,7 +9,8 @@ const COMPLETIONS=new Set(["task.completed","habit.completed","workout.completed
 
 export async function evaluateProgression(context:UserContext):Promise<ProgressionState>{
  const client=await createClient();const {data:{user}}=await client.auth.getUser();if(!user)throw new Error("Not signed in.");const admin=createAdminClient();const now=new Date(),today=isoDate(now);
- const score=context.score.score.score,coverage=context.score.coveragePct,breakdown=context.score.score.breakdown;
+ const score=context.score.score.score,coverage=context.score.coveragePct,scoreBreakdown=context.score.score.breakdown;
+ const breakdown={...scoreBreakdown,financeScore:context.financeOverview.score.overall,finance:{overall:context.financeOverview.score.overall,budget:context.financeOverview.score.budget,cashFlow:context.financeOverview.score.cashFlow,savings:context.financeOverview.score.savings,consistency:context.financeOverview.score.consistency}};
  await admin.from("score_snapshots").upsert({user_id:user.id,score,coverage_pct:coverage,breakdown,captured_on:today},{onConflict:"user_id,captured_on"});
  const {data:previousScore}=await admin.from("score_snapshots").select("score,captured_on").eq("user_id",user.id).neq("captured_on",today).order("captured_on",{ascending:false}).limit(1).maybeSingle();
  if(!previousScore||Number(previousScore.score)!==score)await admin.from("behavior_events").upsert({user_id:user.id,event_type:"score.changed",occurred_at:now.toISOString(),source_table:"score_snapshots",source_id:today,dedupe_key:`score.changed:snapshot:${today}:${score}`,payload:{score,previous_score:previousScore?Number(previousScore.score):null,coverage_pct:coverage}},{onConflict:"user_id,dedupe_key",ignoreDuplicates:true});
@@ -35,7 +36,7 @@ export async function evaluateProgression(context:UserContext):Promise<Progressi
  if(profileRes.data?.created_at&&now.getTime()-new Date(profileRes.data.created_at).getTime()>=30*86400000)unlocks.push({key:"first_month",title:"First Month",category:"behavior"});
  if(fullWorkoutWeek(plansRes.data,logsRes.data??[],now))unlocks.push({key:"full_scheduled_workout_week",title:"Full Scheduled Workout Week",category:"behavior"});
  const budget=(budgetsRes.data??[]).reduce((sum,row)=>sum+Number(row.monthly_limit||0),0),spend=Math.abs((txRes.data??[]).filter(row=>Number(row.amount)<0).reduce((sum,row)=>sum+Number(row.amount),0));if(budget>0&&(txRes.data??[]).length&&spend<=budget)unlocks.push({key:`budget_month_on_target_${isoDate(priorMonthStart).slice(0,7)}`,title:"Budget Month On Target",category:"behavior",metadata:{month:isoDate(priorMonthStart).slice(0,7),budget,spend}});
- const recent=snapshots.filter(row=>new Date(`${row.captured_on}T12:00:00`)>=daysAgo(now,14)),highDays=recent.filter(row=>Number(row.score)>=90&&Number(row.coverage_pct)>=75).length,domainCount=Object.values(breakdown).filter(value=>Number(value)>=80).length;
+ const recent=snapshots.filter(row=>new Date(`${row.captured_on}T12:00:00`)>=daysAgo(now,14)),highDays=recent.filter(row=>Number(row.score)>=90&&Number(row.coverage_pct)>=75).length,domainCount=Object.values(scoreBreakdown).filter(value=>Number(value)>=80).length;
  const eligible=score>=99&&coverage>=75&&snapshots.length>=14&&highDays>=7&&domainCount>=4;if(eligible)unlocks.push({key:"one_percent",title:"1%",category:"elite",threshold:99,metadata:{calibrationDays:snapshots.length,sustainedHighDays:highDays,contributingDomains:domainCount}});
  for(const unlock of unlocks)if(!existing.has(unlock.key))await unlockAchievement(admin,user.id,unlock);
  const stage=eligible?"1%":stageFor(score),previous=(await admin.from("user_progression").select("one_percent_unlocked,one_percent_unlocked_at").eq("user_id",user.id).maybeSingle()).data;

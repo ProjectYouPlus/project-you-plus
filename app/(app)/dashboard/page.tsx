@@ -1,4 +1,5 @@
 import { getHealthOverview } from "@/lib/data/health";
+import { getFinanceOverview } from "@/lib/data/finance";
 import { userDate, supplementDue, scheduleForDate, dateStart, shiftDate, type TrainingPlan } from "@/lib/health/schedule";
 import { getProfile } from "@/lib/data/profile";
 import { getGoals } from "@/lib/data/goals";
@@ -24,8 +25,8 @@ export default async function DashboardPage() {
   const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
   const currentStart = new Date(now); currentStart.setHours(0,0,0,0); currentStart.setDate(currentStart.getDate()-6);
 
-  const [goals, tasks, habits, live, healthOverview] = await Promise.all([
-    getGoals(), getTasks(), getHabits(), getLiveDashboardData(supabase, rangeStart, rangeEnd, profile.timezone), getHealthOverview(),
+  const [goals, tasks, habits, live, healthOverview, financeOverview] = await Promise.all([
+    getGoals(), getTasks(), getHabits(), getLiveDashboardData(supabase, rangeStart, rangeEnd, profile.timezone), getHealthOverview(), getFinanceOverview(),
   ]);
 
   const firstName=(profile.fullName??"You").split(" ")[0];
@@ -49,7 +50,7 @@ export default async function DashboardPage() {
     ...(todaySession?[{done:planLogMap.has(`${today}:${live.activePlan?.id}:${todaySession.key}`)}]:[]),
     ...dueSupplementsToday.map((item)=>({done:hasValue(supplementLogMap,today,item.id)})),
   ];
-  const spendingTarget=spendingTargetStatus(live,now);
+  const spendingTarget=financeOverview.metrics.spendingPacePct === null ? null : financeOverview.metrics.spendingPacePct <= 100;
   const scoreMovePoints=[
     ...(todaySession&&!planLogMap.has(`${today}:${live.activePlan?.id}:${todaySession.key}`)?[3]:[]),
     ...(topTasks.length&&topTasks.some((task)=>!task.completedAt)?[2]:[]),
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
   const recentConsistency=days.filter(day=>day.date>=localDate(currentStart)&&day.date<=today&&day.performance!==null);
   const consistency=recentConsistency.length?Math.round(recentConsistency.reduce((sum,day)=>sum+(day.performance??0),0)/recentConsistency.length):null;
   const body=healthOverview.score.overall;
-  const finance=financeScore(live,now);
+  const finance=financeOverview.score.overall;
   const goalsScore=activeGoals.length?Math.round(activeGoals.reduce((sum,goal)=>sum+goal.progress,0)/activeGoals.length):null;
   const pillars=[
     {key:"Execution",value:todayExecution,weight:30},
@@ -108,8 +109,7 @@ export default async function DashboardPage() {
 
 async function getLiveDashboardData(supabase:Awaited<ReturnType<typeof createClient>>,start:Date,end:Date,timezone:string){
   const startDate=localDate(start),endDate=localDate(end),startIso=dateStart(startDate,timezone).toISOString(),endIso=dateStart(shiftDate(endDate,1),timezone).toISOString();
-  const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);
-  const [habitLogs,workouts,activePlanRes,planLogs,supplements,supplementLogs,metrics,accounts,transactions,budgets,nutritionLogs,events,workSchedules,integrations,connections,challenges,alerts]=await Promise.all([
+  const [habitLogs,workouts,activePlanRes,planLogs,supplements,supplementLogs,metrics,nutritionLogs,events,workSchedules,integrations,connections,challenges,alerts]=await Promise.all([
     supabase.from("habit_logs").select("habit_id,logged_at").gte("logged_at",startDate).lte("logged_at",endDate),
     supabase.from("workouts").select("id,performed_at,duration_minutes").gte("performed_at",startIso).lte("performed_at",endIso),
     supabase.from("workout_plans").select("id,title,goal,days_per_week,session_minutes,schedule,schedule_history,created_at").eq("active",true).order("created_at",{ascending:false}).limit(1).maybeSingle(),
@@ -117,9 +117,6 @@ async function getLiveDashboardData(supabase:Awaited<ReturnType<typeof createCli
     supabase.from("supplements").select("id,name,dosage,timing,frequency,created_at").eq("active",true).order("created_at"),
     supabase.from("supplement_logs").select("supplement_id,logged_on").gte("logged_on",startDate).lte("logged_on",endDate),
     supabase.from("health_metrics").select("metric_type,value,recorded_at").order("recorded_at",{ascending:false}).limit(120),
-    supabase.from("finance_accounts").select("id,balance,account_type"),
-    supabase.from("transactions").select("amount,occurred_at").gte("occurred_at",monthStart.toISOString()),
-    supabase.from("budgets").select("monthly_limit"),
     supabase.from("nutrition_logs").select("calories,protein_g,carbs_g,fat_g,logged_at").gte("logged_at",startIso).lte("logged_at",endIso),
     supabase.from("calendar_events").select("id,title,start_at,end_at,location,source").gte("start_at",startIso).lte("start_at",endIso).order("start_at"),
     supabase.from("work_schedules").select("label,days_of_week,start_time,end_time,active").eq("active",true),
@@ -131,7 +128,7 @@ async function getLiveDashboardData(supabase:Awaited<ReturnType<typeof createCli
   return {
     habitLogs:habitLogs.data??[],workouts:workouts.data??[],activePlan:(activePlanRes.data as ActivePlan|null)??null,
     planLogs:planLogs.data??[],supplements:(supplements.data??[]) as Supplement[],supplementLogs:supplementLogs.data??[],metrics:metrics.data??[],
-    accounts:accounts.data??[],transactions:transactions.data??[],budgets:budgets.data??[],nutritionLogs:nutritionLogs.data??[],events:events.data??[],
+    nutritionLogs:nutritionLogs.data??[],events:events.data??[],
     workSchedules:(workSchedules.data??[]) as WorkSchedule[],integrations:integrations.data??[],friendCount:(connections.data??[]).length,
     activeChallenges:challenges.count??0,activeAlerts:alerts.count??0,
   };
@@ -161,8 +158,6 @@ function uniqueTasks(tasks:Task[]){const map=new Map<string,Task>();for(const ta
 function sessionForDate(plan:ActivePlan|null,date:Date,timezone:string){return scheduleForDate(plan,localDate(date),timezone).find(session=>session.dayIndex===date.getDay())??null}
 function isSupplementDue(item:Supplement,date:Date,hasTraining:boolean){return supplementDue(item.frequency,date.getDay(),hasTraining)}
 function weightedScore(pillars:Array<{value:number|null;weight:number}>){const available=pillars.filter((pillar)=>pillar.value!=null) as Array<{value:number;weight:number}>;const total=available.reduce((sum,item)=>sum+item.weight,0);return total?Math.round(available.reduce((sum,item)=>sum+item.value*item.weight,0)/total):0}
-function financeScore(live:Awaited<ReturnType<typeof getLiveDashboardData>>,now:Date){const budget=live.budgets.reduce((sum,row)=>sum+Number(row.monthly_limit??0),0);if(!budget)return live.accounts.length?60:null;const spent=Math.abs(live.transactions.filter((row)=>Number(row.amount)<0).reduce((sum,row)=>sum+Number(row.amount),0));const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();const pace=budget*(now.getDate()/daysInMonth);if(pace<=0)return 100;const ratio=spent/pace;return ratio<=1?Math.round(100-Math.max(0,1-ratio)*8):Math.max(0,Math.round(100-(ratio-1)*70))}
-function spendingTargetStatus(live:Awaited<ReturnType<typeof getLiveDashboardData>>,now:Date){const budget=live.budgets.reduce((sum,row)=>sum+Number(row.monthly_limit??0),0);if(!budget)return null;const spent=Math.abs(live.transactions.filter((row)=>Number(row.amount)<0).reduce((sum,row)=>sum+Number(row.amount),0));const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();return spent<=budget*(now.getDate()/daysInMonth)}
 function activityWins(live:Awaited<ReturnType<typeof getLiveDashboardData>>,tasks:Task[],start:Date,end:Date){const startTime=start.getTime(),endTime=end.getTime();const inRange=(value:string)=>{const time=new Date(value).getTime();return time>=startTime&&time<=endTime};return live.habitLogs.filter((row)=>inRange(`${row.logged_at}T12:00:00`)).length+live.planLogs.filter((row)=>inRange(`${row.completed_on}T12:00:00`)).length+live.supplementLogs.filter((row)=>inRange(`${row.logged_on}T12:00:00`)).length+tasks.filter((task)=>task.completedAt&&inRange(task.completedAt)).length}
 function performanceStreak(days:DashboardDay[],today:string){const eligible=days.filter((day)=>day.date<=today&&day.performance!=null).sort((a,b)=>a.date.localeCompare(b.date));let best=0,run=0,previous:string|null=null;for(const day of eligible){if((day.performance??0)>=75){const consecutive=previous&&dayDiff(previous,day.date)===1;run=consecutive?run+1:1;best=Math.max(best,run);previous=day.date}else{run=0;previous=null}}const map=new Map(days.map((day)=>[day.date,day.performance]));let cursor=new Date(`${today}T12:00:00`);if((map.get(today)??0)<75)cursor.setDate(cursor.getDate()-1);let current=0;while((map.get(localDate(cursor))??0)>=75){current++;cursor.setDate(cursor.getDate()-1)}return{current,best}}
 function completionDirection(days:DashboardDay[],today:string){const now=new Date(`${today}T12:00:00`);const elapsed=(now.getDay()+6)%7;const averageFor=(offset:number)=>{const values:number[]=[];for(let i=0;i<=elapsed;i++){const date=new Date(now);date.setDate(now.getDate()-elapsed+i+offset);const value=days.find(day=>day.date===localDate(date))?.performance;if(value!=null)values.push(value)}return values.length?Math.round(values.reduce((sum,value)=>sum+value,0)/values.length):null};const current=averageFor(0),previous=averageFor(-7);return current==null||previous==null?0:current-previous}

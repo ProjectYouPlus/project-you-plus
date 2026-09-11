@@ -1,6 +1,8 @@
 import { getHealthOverview } from "@/lib/data/health";
+import { getFinanceOverview } from "@/lib/data/finance";
 import { dateStart, shiftDate } from "@/lib/health/schedule";
 import type { HealthScore } from "@/lib/health/score";
+import type { FinanceOverview } from "@/lib/finance/types";
 import { getProfile } from "@/lib/data/profile";
 import { getGoals } from "@/lib/data/goals";
 import { getTasks } from "@/lib/data/tasks";
@@ -35,7 +37,7 @@ export interface UserContextDomains {
   nutrition: ContextDomain<NutritionContext>;
   supplements: ContextDomain<SupplementContext>;
   health: ContextDomain<{ snapshot:HealthSnapshot; score:number; factors?:HealthScore["factors"]; drivers:{training:number|null;diet:number|null;protocol:number|null;consistency:number|null} }>;
-  finance: ContextDomain<{ summary: MoneySnapshot; score:number; accountCount: number; cashBalance: number | null; totalConnectedBalance: number; investmentsValue: number }>;
+  finance: ContextDomain<{ summary: MoneySnapshot; score:number; drivers:{budget:number|null;cashFlow:number|null;savings:number|null;consistency:number|null}; primaryReason:string; accountCount: number; cashBalance: number | null; totalConnectedBalance: number; investmentsValue: number|null; monthlySpending:number|null;budgetRemaining:number|null;savingsRate:number|null;spendingPacePct:number|null;upcomingBills:{count:number;total:number|null;next:string|null};goals:Array<{name:string;progressPct:number;status:string;requiredMonthlyPace:number|null;targetPaceDate:string|null}>;recommendation:{observation:string;impact:string;recommendedAction:string|null}|null;freshness:string|null }>;
   recentScores: ContextDomain<Array<{ id: string; score: number; scoredOn: string; breakdown: Record<string, number> | null }>>;
   recentPerformance: ContextDomain<{ activeDays: number; completedTasks: number; workouts: number; habitLogDays: number }>;
   achievements: ContextDomain<{ completedChallenges: Array<{ id: string; title: string; points: number; endedOn: string }>; unlocked: Array<{ id:string; key:string; title:string; category:string; unlockedAt:string }> }>;
@@ -56,6 +58,7 @@ export interface ProjectYouContext {
   supplements: SupplementContext;
   workSchedule: WorkScheduleContext;
   financeDetail: FinanceDetailContext;
+  financeOverview: FinanceOverview;
   accountability: AccountabilityContext;
   reminders: ReminderContext;
   integrations: IntegrationContext;
@@ -93,7 +96,7 @@ export const buildProjectYouContext = buildUserContext;
 async function getLiveContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const overview = await getHealthOverview();
+  const [overview, financeOverview] = await Promise.all([getHealthOverview(), getFinanceOverview()]);
   const now = new Date();
   const dayStart = dateStart(overview.today,overview.timezone);
   const dayEnd = dateStart(shiftDate(overview.today,1),overview.timezone);
@@ -157,8 +160,10 @@ async function getLiveContext() {
 
   domainScores.healthScore=overview.score.overall;
   domainScores.health=overview.score.overall===null?null:{training:overview.score.training,diet:overview.score.diet,protocol:overview.score.supplements,consistency:overview.score.consistency};
+  domainScores.financeScore=financeOverview.score.overall;
+  domainScores.finance=financeOverview.score.overall===null?null:{budget:financeOverview.score.budget,cashFlow:financeOverview.score.cashFlow,savings:financeOverview.score.savings,consistency:financeOverview.score.consistency,spendingOnTarget:financeOverview.metrics.spendingPacePct===null?null:financeOverview.metrics.spendingPacePct<=100};
   const health:HealthSnapshot={sleepMinutes:latest.get("sleep_minutes")??null,sleepTargetMinutes:null,recoveryPct:latest.get("recovery_pct")??null,steps:latest.get("steps")??null,stepsTarget:null,waterCups:latest.get("water_cups")??null,waterTargetCups:null,workoutStatus:overview.training.status==="completed"?"completed":overview.training.todayWorkout?"scheduled":"not_scheduled",nutritionStatus:overview.nutrition.meals.length?"logged":"unavailable"};
-  const money:MoneySnapshot={spentTodayCents:Math.round(Math.abs(transactions.filter((item)=>new Date(item.occurred_at)>=dayStart&&Number(item.amount)<0).reduce((sum,item)=>sum+Number(item.amount),0))*100),weeklyBudgetPctUsed:monthlyBudget>0?Math.min(100,Math.round((weeklySpend/(monthlyBudget/4.33))*100)):0,nextBillLabel:billsRes.data?.[0]?.name??null,savingsGoalPct:0};
+  const money:MoneySnapshot={spentTodayCents:Math.round(Math.abs(transactions.filter((item)=>new Date(item.occurred_at)>=dayStart&&Number(item.amount)<0).reduce((sum,item)=>sum+Number(item.amount),0))*100),weeklyBudgetPctUsed:financeOverview.metrics.spendingPacePct??0,nextBillLabel:financeOverview.bills.next?.name??null,savingsGoalPct:financeOverview.goals[0]?.progressPct??0};
   const schedule:CalendarEvent[]=(eventsRes.data??[]).map((event)=>({id:event.id,title:event.title,startAt:event.start_at,endAt:event.end_at,location:event.location,isCurrent:new Date(event.start_at)<=now&&new Date(event.end_at)>=now}));
   const nutrition:NutritionContext={targets:overview.nutrition.targets,today:{...overview.nutrition.totals,meals:overview.nutrition.meals.length},recentMeals:(nutritionRes.data??[]).slice(0,10).map((item)=>({name:item.meal_name||"Meal",calories:Number(item.calories||0),protein:Number(item.protein_g||0),loggedAt:item.logged_at}))};
   const training:TrainingContext={trainingDays:overview.training.activePlan?.schedule.map(x=>x.dayIndex)??[],todayStatus:overview.training.status,activePlan:plan?{title:plan.title,goal:plan.goal,daysPerWeek:Number(plan.days_per_week),sessionMinutes:Number(plan.session_minutes),experience:plan.experience}:null,todaySession:overview.training.todayWorkout?{title:overview.training.todayWorkout.title,focus:overview.training.todayWorkout.focus??"",duration:overview.training.todayWorkout.duration,exercises:overview.training.todayWorkout.exercises}:null,workoutsLast7Days:(workouts7Res.data??[]).length};
@@ -183,7 +188,7 @@ async function getLiveContext() {
     behaviorEventIds:behaviorRows.map((row:any)=>String(row.id)),behaviorSummary,progressionState,unlockedAchievements,
     windows:{week:{from:weekStart.toISOString(),to:now.toISOString()},month:{from:monthStart.toISOString(),to:now.toISOString()}}, workoutsLast7Days:(workouts7Res.data??[]).length,domainScores,healthScoreDetails:overview.score,errors,
   };
-  return {health,money,schedule,nutrition,training,supplements,workSchedule,financeDetail,accountability,reminders,integrations,contextSignals};
+  return {health,money,schedule,nutrition,training,supplements,workSchedule,financeDetail,financeOverview,accountability,reminders,integrations,contextSignals};
 }
 
 function buildDomains(context:ProjectYouContext,signals:ContextSignals):UserContextDomains {
@@ -193,7 +198,7 @@ function buildDomains(context:ProjectYouContext,signals:ContextSignals):UserCont
   const evidence=(domain:string,table:string,ids:string[],window?:{from:string;to:string}):ContextEvidence[]=>ids.length?[{domain,table,ids:ids.slice(0,30),...(window?{window}:{})}]:[];
   const domain=<T>(data:T|null,reason:string|null,evidenceRows:ContextEvidence[],errors:string[]=[]):ContextDomain<T>=>({availability:data===null?"unavailable":errors.length?"partial":"available",reason:data===null?(errors.length?`Could not load this context: ${errors.join(" ")}`:reason):errors.length?`Some context could not be loaded: ${errors.join(" ")}`:null,data,evidence:evidenceRows});
   const hasHealthScore=Boolean(context.training.activePlan)||signals.nutritionIds.length>0||signals.supplementIds.length>0;
-  const hasFinance=signals.accountIds.length>0||signals.transactionIds.length>0||Boolean(context.money.nextBillLabel);
+  const hasFinance=signals.domainScores.financeScore!==null||signals.accountIds.length>0||signals.transactionIds.length>0||Boolean(context.money.nextBillLabel)||context.financeOverview.goals.length>0;
   const recentCompletedTaskIds=new Set(signals.completedTaskIds);const performanceActiveDays=new Set([...signals.recentHabitDays,...context.tasks.filter(task=>recentCompletedTaskIds.has(task.id)&&task.completedAt).map(task=>task.completedAt!.slice(0,10))]).size;
   return {
     profile:domain({id:context.profile.id,name:context.profile.fullName,timezone:context.profile.timezone,blueprint:context.profile.blueprint},null,evidence("profile","profiles",[context.profile.id])),
@@ -208,7 +213,7 @@ function buildDomains(context:ProjectYouContext,signals:ContextSignals):UserCont
     health:domain(hasHealthScore&&signals.domainScores.healthScore!==null&&signals.domainScores.health?{snapshot:context.health,factors:signals.healthScoreDetails?.factors,score:signals.domainScores.healthScore,drivers:signals.domainScores.health}:null,"No Health Score inputs are available.",[
       ...evidence("health","health_metrics",signals.metricIds,signals.windows.month),...evidence("health","workout_plan_logs",signals.workoutLogIds,signals.windows.week),...evidence("health","nutrition_logs",signals.nutritionIds,signals.windows.week),...evidence("health","supplement_logs",signals.supplementLogIds,signals.windows.week)
     ],[...(signals.errors.health??[]),...(signals.errors.workout??[]),...(signals.errors.nutrition??[]),...(signals.errors.supplements??[])]),
-    finance:domain(hasFinance&&signals.domainScores.financeScore!==null?{summary:context.money,score:signals.domainScores.financeScore,accountCount:signals.accountIds.length,cashBalance:cashBalance(context.financeDetail.accounts),totalConnectedBalance:context.financeDetail.accounts.reduce((sum,account)=>sum+account.balance,0),investmentsValue:context.financeDetail.investmentsValue}:null,"No connected financial data is available.",[...evidence("finance","finance_accounts",signals.accountIds),...evidence("finance","transactions",signals.transactionIds,signals.windows.month)],signals.errors.finance),
+    finance:domain(hasFinance&&signals.domainScores.financeScore!==null?{summary:context.money,score:signals.domainScores.financeScore,drivers:{budget:context.financeOverview.score.budget,cashFlow:context.financeOverview.score.cashFlow,savings:context.financeOverview.score.savings,consistency:context.financeOverview.score.consistency},primaryReason:context.financeOverview.score.primaryReason,accountCount:signals.accountIds.length,cashBalance:context.financeOverview.metrics.cashAvailable,totalConnectedBalance:context.financeDetail.accounts.reduce((sum,account)=>sum+account.balance,0),investmentsValue:context.financeOverview.investments.totalValue,monthlySpending:context.financeOverview.metrics.monthlySpending,budgetRemaining:context.financeOverview.metrics.budgetRemaining,savingsRate:context.financeOverview.metrics.savingsRate,spendingPacePct:context.financeOverview.metrics.spendingPacePct,upcomingBills:{count:context.financeOverview.bills.upcomingCount,total:context.financeOverview.bills.totalUpcoming,next:context.financeOverview.bills.next?.name??null},goals:context.financeOverview.goals.map(goal=>({name:goal.name,progressPct:goal.progressPct,status:goal.status,requiredMonthlyPace:goal.requiredMonthlyPace,targetPaceDate:goal.targetPaceDate})),recommendation:context.financeOverview.recommendation?{observation:context.financeOverview.recommendation.observation,impact:context.financeOverview.recommendation.impact,recommendedAction:context.financeOverview.recommendation.recommendedAction}:null,freshness:context.financeOverview.dataFreshness.lastSyncedAt}:null,"No connected financial data is available.",[...evidence("finance","finance_accounts",signals.accountIds),...evidence("finance","transactions",signals.transactionIds,signals.windows.month)],signals.errors.finance),
     recentScores:domain(signals.recentScores.length?signals.recentScores:null,"No recent saved scores are available.",evidence("recentScores","score_snapshots",signals.recentScores.map(row=>row.id)),signals.errors.recentScores),
     recentPerformance:domain(performanceActiveDays||signals.workoutsLast7Days||signals.completedTaskIds.length?{activeDays:performanceActiveDays,completedTasks:signals.completedTaskIds.length,workouts:signals.workoutsLast7Days,habitLogDays:signals.recentHabitDays.length}:null,"No recent performance history is available.",[...evidence("recentPerformance","habit_logs",signals.habitLogIds,signals.windows.month),...evidence("recentPerformance","tasks",signals.completedTaskIds,signals.windows.month),...evidence("recentPerformance","workout_plan_logs",signals.workoutLogIds,signals.windows.week)],signals.errors.recentPerformance),
     achievements:domain(signals.completedChallenges.length||signals.unlockedAchievements.length?{completedChallenges:signals.completedChallenges,unlocked:signals.unlockedAchievements}:null,"No achievements are unlocked yet.",[...evidence("achievements","challenges",signals.completedChallenges.map(row=>row.id)),...evidence("achievements","user_achievements",signals.unlockedAchievements.map(row=>row.id))]),
