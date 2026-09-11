@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { recordUserEvent } from "@/lib/ai/user-events";
 
 export async function addSupplement(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -28,7 +29,14 @@ export async function logSupplementToday(supplementId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const loggedOn = new Date().toISOString().slice(0, 10);
-  await supabase.from("supplement_logs").upsert({ user_id: user.id, supplement_id: supplementId, logged_on: loggedOn }, { onConflict: "user_id,supplement_id,logged_on" });
+  const { error } = await supabase.from("supplement_logs").upsert({ user_id: user.id, supplement_id: supplementId, logged_on: loggedOn }, { onConflict: "user_id,supplement_id,logged_on" });
+  if (!error) {
+    try {
+      await recordUserEvent(supabase, { userId: user.id, eventName: "supplement.completed", domain: "health", entityType: "supplement", entityId: supplementId, metadata: { loggedOn } });
+    } catch (eventError) {
+      console.error("Supplement intelligence event skipped:", eventError);
+    }
+  }
   revalidatePath("/supplements");
   revalidatePath("/dashboard");
 }
