@@ -194,7 +194,7 @@ function goalProjection(goal: FinanceGoal, history: GoalHistory[], now: Date): G
   let status: GoalProjection["status"] = "insufficient_data";
   if (remainingAmount === 0 && targetAmount > 0) status = "completed";
   else if (currentMonthlyPace !== null && requiredMonthlyPace !== null) status = currentMonthlyPace > requiredMonthlyPace * 1.05 ? "ahead" : currentMonthlyPace >= requiredMonthlyPace * 0.95 ? "on_track" : "behind";
-  return { goalId: goal.id, name: goal.title, currentAmount, targetAmount, remainingAmount, progressPct, currentMonthlyPace, requiredMonthlyPace, estimatedCurrentPaceDate, targetPaceDate: goal.deadline, status };
+  return { goalId: goal.id, name: goal.title, financialGoalType: goal.financial_goal_type, linkedAccountId: goal.linked_account_id, targetMonthlyContribution: configuredTargetPace, currentAmount, targetAmount, remainingAmount, progressPct, currentMonthlyPace, requiredMonthlyPace, estimatedCurrentPaceDate, targetPaceDate: goal.deadline, status };
 }
 
 function chooseRecommendation(input: {

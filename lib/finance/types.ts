@@ -82,6 +82,9 @@ export type FinanceScore = {
 export type GoalProjection = {
   goalId: string;
   name: string;
+  financialGoalType: string | null;
+  linkedAccountId: string | null;
+  targetMonthlyContribution: number | null;
   currentAmount: number;
   targetAmount: number;
   remainingAmount: number;
