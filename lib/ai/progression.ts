@@ -7,8 +7,8 @@ export type ProgressionLevel = "starting" | "foundation" | "momentum" | "alignme
 const SCORE_ACHIEVEMENTS = [55, 65, 75, 85, 95] as const;
 const MILESTONES = [60, 70, 80, 90] as const;
 
-export function levelForScore(score: number): ProgressionLevel {
-  if (score >= 99) return "one_percent";
+// Score alone never awards The 1%. That level is gated separately by sustained, calibrated performance.
+export function levelForScore(score: number): Exclude<ProgressionLevel, "one_percent"> {
   if (score >= 90) return "elite";
   if (score >= 80) return "alignment";
   if (score >= 70) return "momentum";
@@ -36,28 +36,32 @@ export async function syncProgression(supabase: SupabaseClient, userId: string, 
     .limit(30);
 
   const rows = history ?? [];
-  const sustainedHighDays = rows.filter((row) => Number(row.score) >= 95 && Number(row.coverage_pct) >= 80).length;
+  const sustainedHighDays = consecutiveQualifiedDays(rows);
   const distinctDomains = Object.keys(explanation.score.breakdown).filter((key) => explanation.score.breakdown[key] > 0).length;
   const onePercentEligible = score >= 99 && explanation.coveragePct >= 85 && distinctDomains >= 4 && sustainedHighDays >= 14;
 
   const { data: current } = await supabase
     .from("user_progression")
-    .select("highest_score,one_percent_unlocked")
+    .select("highest_score,one_percent_unlocked,one_percent_unlocked_at")
     .eq("user_id", userId)
     .maybeSingle();
 
   const wasOnePercent = Boolean(current?.one_percent_unlocked);
-  await supabase.from("user_progression").upsert({
+  const unlocked = onePercentEligible || wasOnePercent;
+  const progressionPatch: Record<string, unknown> = {
     user_id: userId,
-    current_level: onePercentEligible || wasOnePercent ? "one_percent" : levelForScore(score),
+    current_level: unlocked ? "one_percent" : levelForScore(score),
     highest_score: Math.max(Number(current?.highest_score ?? 0), score),
     current_score: score,
     coverage_pct: explanation.coveragePct,
     sustained_high_days: sustainedHighDays,
-    one_percent_unlocked: onePercentEligible || wasOnePercent,
-    one_percent_unlocked_at: onePercentEligible && !wasOnePercent ? new Date().toISOString() : undefined,
+    one_percent_unlocked: unlocked,
     updated_at: new Date().toISOString(),
-  }, { onConflict: "user_id" });
+  };
+  if (onePercentEligible && !wasOnePercent) progressionPatch.one_percent_unlocked_at = new Date().toISOString();
+  else if (current?.one_percent_unlocked_at) progressionPatch.one_percent_unlocked_at = current.one_percent_unlocked_at;
+
+  await supabase.from("user_progression").upsert(progressionPatch, { onConflict: "user_id" });
 
   await unlockScoreAchievements(supabase, userId, score);
   if (onePercentEligible && !wasOnePercent) {
@@ -70,7 +74,7 @@ export async function syncProgression(supabase: SupabaseClient, userId: string, 
     });
   }
 
-  return { currentLevel: onePercentEligible || wasOnePercent ? "one_percent" : levelForScore(score), onePercentEligible, sustainedHighDays, distinctDomains };
+  return { currentLevel: unlocked ? "one_percent" : levelForScore(score), onePercentEligible, sustainedHighDays, distinctDomains };
 }
 
 async function unlockScoreAchievements(supabase: SupabaseClient, userId: string, score: number) {
@@ -121,6 +125,23 @@ async function unlockAchievement(
     metadata: { key, title, category, ...metadata },
   });
   return true;
+}
+
+function consecutiveQualifiedDays(rows: Array<{ score: unknown; coverage_pct: unknown; captured_on: string }>) {
+  if (!rows.length) return 0;
+  let run = 0;
+  let previousDate: Date | null = null;
+  for (const row of rows) {
+    if (Number(row.score) < 95 || Number(row.coverage_pct) < 80) break;
+    const date = new Date(`${row.captured_on}T12:00:00Z`);
+    if (previousDate) {
+      const diffDays = Math.round((previousDate.getTime() - date.getTime()) / 86_400_000);
+      if (diffDays !== 1) break;
+    }
+    run += 1;
+    previousDate = date;
+  }
+  return run;
 }
 
 function milestoneTitle(threshold: number) {
