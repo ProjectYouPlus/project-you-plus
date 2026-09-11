@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { buildProjectYouContext } from "@/lib/ai/context";
-import { buildLongitudinalIntelligenceContext, compactLongitudinalContext } from "@/lib/ai/longitudinal-context";
+import { buildUnifiedUserContext, compactUnifiedUserContext } from "@/lib/ai/unified-context";
 import { orchestrateCoachRequest } from "@/lib/ai/user-orchestrator";
 import { callProjectYouAI, hasCloudAI } from "@/lib/ai/provider";
-import { coachSystemWithContext } from "@/lib/ai/prompts";
+import { PROJECT_YOU_SYSTEM } from "@/lib/ai/prompts";
 import { fallbackCoachReply } from "@/lib/ai/fallbacks";
 
 export const runtime = "nodejs";
@@ -18,8 +17,8 @@ export async function POST(request: Request) {
     const message = body.message?.trim();
     if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
-    const context = await buildProjectYouContext();
-    const longitudinal = await buildLongitudinalIntelligenceContext(context);
+    const unified = await buildUnifiedUserContext();
+    const context = unified.current;
     const orchestration = orchestrateCoachRequest(message, context);
     const history = (body.history ?? []).slice(-12).filter((item) => item.role === "user" || item.role === "assistant");
 
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
           : "Prefer one clear decision and the next best action.";
 
       const result = await callProjectYouAI({
-        system: `${coachSystemWithContext(context)}\n\nLONGITUDINAL PROJECT YOU+ CONTEXT:\n${JSON.stringify(compactLongitudinalContext(longitudinal), null, 2)}\n\nINTERNAL SPECIALIST ORCHESTRATION:\n${orchestration.instructions}\n\nCURRENT COACHING MODE: ${body.coachMode ?? "decide"}. ${modeInstruction}\n\nBehave like one continuous personal operating-system intelligence. Connect domains when the context supports it, but never invent data that is not connected.`,
+        system: `${PROJECT_YOU_SYSTEM}\n\nAUTHORITATIVE UNIFIED PROJECT YOU+ USER CONTEXT:\n${JSON.stringify(compactUnifiedUserContext(unified), null, 2)}\n\nINTERNAL SPECIALIST ORCHESTRATION:\n${orchestration.instructions}\n\nCURRENT COACHING MODE: ${body.coachMode ?? "decide"}. ${modeInstruction}\n\nBehave like one continuous personal operating-system intelligence. Connect domains when the context supports it, but never invent data that is not connected.`,
         messages: [...history, { role: "user", content: message }],
         maxTokens: 900,
       });
