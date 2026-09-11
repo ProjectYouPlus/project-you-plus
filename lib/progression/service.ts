@@ -26,7 +26,7 @@ export async function evaluateProgression(context: UserContext): Promise<Progres
     admin.from("workout_plans").select("id,days_per_week").eq("user_id", user.id),
     admin.from("workout_plan_logs").select("plan_id,session_key,completed_on,status").eq("user_id", user.id).eq("status", "completed").gte("completed_on", isoDate(start)),
     admin.from("budgets").select("monthly_limit,period_start").eq("user_id", user.id),
-    admin.from("transactions").select("amount,occurred_at").eq("user_id", user.id).gte("occurred_at", startOfPriorMonth(now).toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
+    admin.from("transactions").select("amount,occurred_at").eq("user_id", user.id).gte("occurred_at", start.toISOString()).lt("occurred_at", startOfMonth(now).toISOString()),
     admin.from("user_progression").select("*").eq("user_id", user.id).maybeSingle(),
   ]);
   throwErrors(snapshotsRes.error, eventsRes.error, tasksRes.error, workoutPlansRes.error, workoutLogsRes.error, previousRes.error);
@@ -89,9 +89,23 @@ async function unlockAchievement(admin: ReturnType<typeof createAdminClient>, us
 async function recordMilestone(admin: ReturnType<typeof createAdminClient>, userId: string, level: number, stage: string, now: Date, index: number) { const { data } = await admin.from("progression_milestones").upsert({ user_id: userId, level, stage, reached_at: now.toISOString(), evidence: { progressionIndex: index } }, { onConflict: "user_id,level", ignoreDuplicates: true }).select("id,reached_at").maybeSingle(); if (data) await event(admin, userId, "milestone.unlocked", `milestone.unlocked:progression:${level}`, data.reached_at, { level, stage, title: `${level} — ${stage}` }); }
 async function event(admin: ReturnType<typeof createAdminClient>, userId: string, eventType: string, dedupeKey: string, occurredAt: string, payload: Record<string, unknown>) { await admin.from("behavior_events").upsert({ user_id: userId, event_type: eventType, occurred_at: occurredAt, source_table: "user_progression", source_id: null, dedupe_key: dedupeKey, payload }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true }); }
 function scoreDomains(value: unknown) { const row = value && typeof value === "object" ? value as Record<string, unknown> : {}, result: Record<string, number> = {}; for (const [key, item] of Object.entries(row)) if (typeof item === "number" && Number.isFinite(item) && key !== "financeScore") result[key] = item; return result; }
-function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_start: string }>, transactions: Array<{ amount: unknown; occurred_at: string }>, now: Date) { const prior = startOfPriorMonth(now).toISOString().slice(0, 7), limit = budgets.filter((row) => String(row.period_start).slice(0, 7) === prior).reduce((sum, row) => sum + Number(row.monthly_limit || 0), 0), rows = transactions.filter((row) => String(row.occurred_at).slice(0, 7) === prior), spend = Math.abs(rows.filter((row) => Number(row.amount) < 0).reduce((sum, row) => sum + Number(row.amount), 0)); return limit > 0 && rows.length && spend <= limit ? [prior] : []; }
+function onTargetBudgetMonths(budgets: Array<{ monthly_limit: unknown; period_start: string }>, transactions: Array<{ amount: unknown; occurred_at: string }>, now: Date) {
+  const currentMonth = startOfMonth(now).toISOString().slice(0, 7);
+  const limits = new Map<string, number>();
+  for (const budget of budgets) {
+    const month = String(budget.period_start).slice(0, 7);
+    if (month >= currentMonth) continue;
+    limits.set(month, (limits.get(month) ?? 0) + Number(budget.monthly_limit || 0));
+  }
+  const qualified: string[] = [];
+  for (const [month, limit] of limits) {
+    const rows = transactions.filter((row) => String(row.occurred_at).slice(0, 7) === month);
+    const spend = Math.abs(rows.filter((row) => Number(row.amount) < 0).reduce((sum, row) => sum + Number(row.amount), 0));
+    if (limit > 0 && rows.length > 0 && spend <= limit) qualified.push(month);
+  }
+  return qualified.sort();
+}
 function startOfMonth(date: Date) { return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)); }
-function startOfPriorMonth(date: Date) { return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1)); }
 function nullableNumber(value: unknown) { return value == null ? null : Number(value); }
 function winTitle(type: string, payload: unknown) { const row = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}; if (typeof row.title === "string") return row.title; if (type === "progression.personal_best") return `New personal best: Level ${row.level}`; if (type === "progression.one_percent_earned") return "1% earned"; if (type === "finance.goal_completed") return "Financial goal completed"; return type === "achievement.unlocked" ? "Achievement unlocked" : "Milestone reached"; }
 function throwErrors(...errors: Array<{ message: string } | null>) { const error = errors.find(Boolean); if (error) throw new Error(error.message); }
