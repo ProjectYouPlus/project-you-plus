@@ -196,7 +196,7 @@ async function reviewImageAsset(url: string, content: Row): Promise<VisualReview
 
 async function buildSharedContext(admin: AdminClient, ownerId: string, content: Row) {
   const [runs, plans, trends, metrics, learnings] = await Promise.all([
-    admin.from("marketing_agent_runs").select("id,agent_id,status,output,metadata,created_at").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(8),
+    admin.from("marketing_agent_runs").select("id,content_item_id,agent_id,status,output,metadata,created_at").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(8),
     admin.from("marketing_daily_plans").select("plan_date,objective,summary,tasks,status").eq("owner_id", ownerId).order("plan_date", { ascending: false }).limit(1),
     admin.from("marketing_trend_signals").select("title,opportunity,relevance_score,brand_fit_score,status").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(5),
     admin.from("marketing_daily_metrics").select("metric_date,followers,reach,likes,comments,shares,saves,profile_visits,website_clicks,signups").eq("owner_id", ownerId).order("metric_date", { ascending: false }).limit(3),
