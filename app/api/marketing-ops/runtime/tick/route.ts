@@ -1,13 +1,14 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureDailyMarketingPlanForOwner } from "@/lib/marketing/daily-planner";
 import { processMarketingAgentQueueForOwner } from "@/lib/marketing/runtime-agents";
 import { processHiggsfieldQueueForOwner } from "@/lib/marketing/higgsfield-worker";
 import { publishDueInstagramContent } from "@/lib/marketing/instagram-worker";
 
 export const maxDuration = 60;
 
-type RuntimeMode = "agents" | "provider" | "publish" | "all";
+type RuntimeMode = "plan" | "agents" | "provider" | "publish" | "all";
 
 export async function POST(request: Request) {
   const admin = createAdminClient();
@@ -15,12 +16,20 @@ export async function POST(request: Request) {
   if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const requestedMode = new URL(request.url).searchParams.get("mode") || "all";
-  const mode: RuntimeMode = ["agents", "provider", "publish", "all"].includes(requestedMode) ? requestedMode as RuntimeMode : "all";
+  const mode: RuntimeMode = ["plan", "agents", "provider", "publish", "all"].includes(requestedMode) ? requestedMode as RuntimeMode : "all";
   const ownerIds = await getMarketingOwnerIds(admin);
   const owners: Array<Record<string, unknown>> = [];
 
   for (const ownerId of ownerIds.slice(0, 5)) {
     const ownerResult: Record<string, unknown> = { ownerId };
+
+    if (mode === "plan" || mode === "all") {
+      try {
+        ownerResult.plan = await ensureDailyMarketingPlanForOwner(ownerId);
+      } catch (error) {
+        ownerResult.planError = error instanceof Error ? error.message : "Daily planner failed";
+      }
+    }
 
     if (mode === "agents" || mode === "all") {
       try {
