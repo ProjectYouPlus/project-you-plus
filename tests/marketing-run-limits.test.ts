@@ -7,7 +7,7 @@ const now = new Date("2026-09-11T16:00:00.000Z");
 test("allows the first run and calculates the UTC day boundary", () => {
   assert.deepEqual(checkMarketingRunLimit([], { dailyLimit: 3, cooldownMs: 60_000 }, now), { allowed: true });
   assert.equal(utcDayStart(now), "2026-09-11T00:00:00.000Z");
-  assert.equal(MARKETING_DEPARTMENT_DAILY_LIMIT, 20);
+  assert.equal(MARKETING_DEPARTMENT_DAILY_LIMIT, 120);
 });
 
 test("blocks a concurrent run", () => {
@@ -17,7 +17,7 @@ test("blocks a concurrent run", () => {
     now
   );
   assert.equal(decision.allowed, false);
-  if (!decision.allowed) assert.match(decision.message, /in progress/);
+  if (!decision.allowed) assert.match(decision.message, /execution lanes are busy/i);
 });
 
 test("counts failed attempts toward the daily cap", () => {
@@ -31,7 +31,7 @@ test("counts failed attempts toward the daily cap", () => {
     now
   );
   assert.equal(decision.allowed, false);
-  if (!decision.allowed) assert.match(decision.message, /Daily agent run limit reached/);
+  if (!decision.allowed) assert.match(decision.message, /Daily agent run safety limit reached/);
 });
 
 test("enforces a short cooldown between attempts", () => {
