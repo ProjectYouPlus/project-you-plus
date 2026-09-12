@@ -6,12 +6,14 @@ Provider generation is represented separately in `marketing_generation_jobs`. Ag
 
 Content flow:
 
-1. Atlas/Northstar create prioritized briefs.
+1. Atlas creates one idempotent morning plan per America/New_York day after 6 AM.
 2. Frame, Signal and Muse may work concurrently when dependencies allow.
-3. Higgsfield generation is tracked in `marketing_generation_jobs`.
+3. Higgsfield generation is tracked in `marketing_generation_jobs` and runs on its own provider heartbeat.
 4. Muse performs one quality gate after an asset exists.
 5. Owner approves.
-6. Instagram publishes approved media.
+6. Instagram publishes approved, due media on its own publishing heartbeat.
 7. Vector records post-performance learning.
 
-Static posts should use the shortest path possible (Signal + Muse, then owner approval). Reels may use Frame + Signal in parallel, followed by Muse and provider generation. Revision loops must be bounded to one automatic correction pass before owner review.
+The background runtime uses separate secured heartbeats for planning, OpenAI agent work, Higgsfield provider work and Instagram publishing so one slow dependency cannot block the rest of the department.
+
+Static posts should use the shortest path possible. The default daily mix is static/editorial, carousel and story content. Reels are selective and normally capped at one new Reel in a rolling seven-day production window. Reels use premium motion typography and real Project You+ UI rather than fake UGC or AI talking-head advertising. Revision loops are bounded to one automatic correction pass before owner review.
