@@ -39,13 +39,13 @@ export async function processHiggsfieldQueueForOwner(ownerId: string, limit = 2)
 }
 
 async function submitJob(admin: AdminClient, secret: Awaited<ReturnType<typeof getHiggsfieldSecret>>, job: Job) {
-  const { modelPath, body } = buildHiggsfieldGenerationRequest(job);
+  const { modelPath, body } = buildHiggsfieldGenerationRequest(job, secret);
   const estimate = await estimateHiggsfieldRequest(secret, modelPath, body);
   if (!(estimate.credits > 0)) throw new Error("Higgsfield returned an invalid zero-credit estimate; generation was not submitted.");
   const { error: reserveError } = await admin.rpc("reserve_marketing_generation_estimate", { p_job_id: job.id, p_estimate: estimate.credits });
   if (reserveError) throw reserveError;
   const submitted = await submitHiggsfieldRequest(secret, modelPath, body);
-  const nextStatus = submitted.status === "processing" ? "processing" : "submitted";
+  const nextStatus = submitted.status === "in_progress" ? "processing" : "submitted";
   const metadata = { ...(job.metadata || {}), model_path: modelPath, request_body: body, status_url: submitted.statusUrl, cancel_url: submitted.cancelUrl, estimate_usd: estimate.usd, provider_status: submitted.status, submitted_at: new Date().toISOString() };
   const { error: updateError } = await admin.from("marketing_generation_jobs").update({ status: nextStatus, provider_job_id: submitted.requestId, model: modelPath, metadata, error_message: null, updated_at: new Date().toISOString() }).eq("id", job.id);
   if (updateError) throw updateError;
