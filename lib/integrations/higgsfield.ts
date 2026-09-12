@@ -150,19 +150,23 @@ async function higgsfieldFetch(secret: HiggsfieldSecret, path: string, init: Req
   catch { data = { detail: text }; }
   if (!response.ok) {
     const detail = typeof data.detail === "string" ? data.detail : data.detail ? JSON.stringify(data.detail) : "";
-    const message = typeof data.error === "string" ? data.error : data.error?.message || detail || `Higgsfield API ${response.status}`;
+    const errorObject = typeof data.error === "object" && data.error !== null ? data.error : null;
+    const message = typeof data.error === "string" ? data.error : errorObject?.message || detail || `Higgsfield API ${response.status}`;
     throw new Error(message);
   }
   return data;
 }
 
 function extractHiggsfieldAssetUrl(data: HiggsfieldResponse) {
-  const candidates = [
+  const outputArray = Array.isArray(data.output) ? data.output : undefined;
+  const outputObject = !Array.isArray(data.output) && data.output ? data.output : undefined;
+  const candidates: Array<string | undefined> = [
     data.images?.[0]?.url,
     data.video?.url,
     data.videos?.[0]?.url,
     data.outputs?.[0]?.url,
-    Array.isArray(data.output) ? data.output[0]?.url : data.output?.url,
+    outputArray?.[0]?.url,
+    outputObject?.url,
   ];
   return candidates.find((value): value is string => typeof value === "string" && /^https:\/\//.test(value)) || null;
 }
