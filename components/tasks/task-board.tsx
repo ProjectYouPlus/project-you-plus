@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { createTask, toggleTaskComplete, deleteTask, updateTask } from "@/lib/actions/tasks";
 import type { Task, Tier, Goal } from "@/lib/types";
+import { emitFeedback } from "@/lib/celebrations/client";
 
 type Tab = "today" | "upcoming" | "completed";
 
@@ -32,6 +33,7 @@ export function TaskBoard({ initialTasks, goals }: { initialTasks: Task[]; goals
   function handleToggle(task: Task) {
     const completed = !task.completedAt;
     setTasks((ts) => ts.map((t) => (t.id === task.id ? { ...t, completedAt: completed ? new Date().toISOString() : null } : t)));
+    if (completed) emitFeedback("task");
     startTransition(() => {
       void toggleTaskComplete(task.id, completed);
     });

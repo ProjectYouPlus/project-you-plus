@@ -6,6 +6,7 @@ import { PersonalizeProjectYouEntry } from "@/components/onboarding/personalize-
 import { getProfile } from "@/lib/data/profile";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
+import { CelebrationProvider } from "@/components/celebrations/celebration-provider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile();
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </div>
       <BottomNav />
+      {!isDemoMode && <CelebrationProvider />}
       {!isDemoMode && <ActivityTracker />}
     </div>
   );

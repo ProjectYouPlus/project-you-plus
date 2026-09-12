@@ -1,5 +1,5 @@
 import type { AchievementCategory, AchievementTier } from "@/lib/progression/achievements";
-export const ONE_PERCENT_BRAND_ASSET = "/project-you-plus-logo.svg" as const;
+export const ONE_PERCENT_BRAND_ASSET = "/progression/one-percent-badge.webp" as const;
 export type ProgressionStage = "Foundation" | "Momentum" | "Alignment" | "Elite" | "1%";
 export type ProgressionAchievement = { id: string; key: string; title: string; description: string; category: AchievementCategory; tier: AchievementTier; unlockedAt: string; evidence: Record<string, unknown> };
 export type ProgressionMilestone = { id: string; level: number; stage: ProgressionStage; reachedAt: string };

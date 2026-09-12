@@ -16,6 +16,7 @@ import {
 } from "@/lib/actions/reset";
 import type { ResetView } from "@/lib/reset/service";
 import type { PlannedResetAction } from "@/lib/reset/engine";
+import { DayCloseButton } from "@/components/celebrations/day-close-button";
 
 export function ResetExperience({ view }: { view: ResetView }) {
   if (!view.available) return <EmptyStart canStart={view.canStartManually}/>;
@@ -73,7 +74,7 @@ function CloseDaySection({view}:{view:ResetView}) {
     <label className="mt-4 block text-[11px] font-semibold text-text-2" htmlFor="reset-blocker">Main blocker <span className="font-normal text-text-3">(optional)</span></label><select id="reset-blocker" name="blocker" defaultValue="" className="mt-2 min-h-11 w-full rounded-xl border border-white/[.08] bg-[#111016] px-3 text-[12px] text-text-1"><option value="">No blocker to add</option><option value="ran_out_of_time">Ran out of time</option><option value="schedule_changed">Schedule changed</option><option value="low_energy">Low energy</option><option value="family_responsibility">Family responsibility</option><option value="forgot">Forgot</option><option value="plan_unrealistic">Plan was unrealistic</option><option value="no_longer_relevant">No longer relevant</option><option value="other">Something else</option></select>
     <label className="mt-4 block text-[11px] font-semibold text-text-2" htmlFor="reset-reflection">One note <span className="font-normal text-text-3">(optional)</span></label><textarea id="reset-reflection" name="reflection" maxLength={500} rows={2} className="mt-2 w-full rounded-xl border border-white/[.08] bg-[#111016] p-3 text-[12px] text-text-1 outline-none focus:border-accent/60" placeholder="What changed today?"/>
     <div className="mt-3 text-[10.5px] leading-relaxed text-text-3">Calculation: completed actions count 1; partial or minimum versions count 0.5; skipped, blocked, and rescheduled actions count 0. Only real actions due today are included.</div>
-    <div className="mt-4 grid grid-cols-2 gap-2"><button className="py-liquid-button min-h-12 w-full" type="submit">Close today</button><button formAction={pauseResetTodayAction} className="min-h-12 w-full rounded-[14px] border border-white/[.08] px-3 text-[11px] font-semibold text-text-2" type="submit">Pause today without punishment</button></div>
+    <div className="mt-4 grid grid-cols-2 gap-2"><DayCloseButton/><button formAction={pauseResetTodayAction} className="min-h-12 w-full rounded-[14px] border border-white/[.08] px-3 text-[11px] font-semibold text-text-2" type="submit">Pause today without punishment</button></div>
   </form>;
 }
 

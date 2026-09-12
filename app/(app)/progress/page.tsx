@@ -3,6 +3,9 @@ import Link from "next/link";
 import { buildUserContext } from "@/lib/ai/context";
 import { evaluateProgression } from "@/lib/progression/service";
 import { PROGRESSION_CONFIG } from "@/lib/progression/config";
+import { ACHIEVEMENTS } from "@/lib/progression/achievements";
+import { AchievementBadge } from "@/components/celebrations/achievement-badge";
+import { AchievementGallery } from "@/components/celebrations/achievement-gallery";
 
 export default async function ProgressPage() {
   const state = await evaluateProgression(await buildUserContext());
@@ -25,11 +28,11 @@ export default async function ProgressPage() {
     </section>
 
     <Section title="Milestones" sub="Permanent first-reached history. A later level change never removes it.">
-      <div className="grid gap-2 sm:grid-cols-5">{PROGRESSION_CONFIG.milestones.map((milestone)=>{const earned=state.milestones.find((item)=>item.level===milestone.level);return <div key={milestone.level} className={`rounded-2xl border p-3 ${earned?"border-violet-400/25 bg-violet-500/10":"border-border bg-surface/25"}`}><div className={`text-[19px] font-bold ${earned?"text-accent-text":"text-text-3"}`}>{milestone.level}</div><div className="mt-1 text-[10px] font-semibold text-text-1">{milestone.stage}</div><div className="mt-2 text-[8.5px] text-text-3">{earned?new Date(earned.reachedAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"Locked"}</div></div>})}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{PROGRESSION_CONFIG.milestones.map((milestone)=>{const earned=state.milestones.find((item)=>item.level===milestone.level);return <div key={milestone.level} className={`rounded-2xl border p-4 text-center ${earned?"border-violet-400/25 bg-violet-500/10":"border-border bg-surface/25"}`}><AchievementBadge level={milestone.level} locked={!earned}/><div className={`mt-2 text-[16px] font-bold ${earned?"text-accent-text":"text-text-3"}`}>{milestone.level} · {milestone.stage}</div><div className="mt-1 text-[8.5px] text-text-3">{earned?new Date(earned.reachedAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"Locked"}</div></div>})}</div>
     </Section>
 
     <Section title="Achievements" sub="Only meaningful, evidence-backed unlocks appear here.">
-      {state.achievements.length ? <div className="grid gap-2 sm:grid-cols-2">{state.achievements.map((item)=><article key={item.id} className="rounded-2xl border border-border bg-surface/30 p-4"><div className="flex items-start justify-between gap-3"><div><div className="text-[13px] font-semibold text-text-1">{item.title}</div><div className="mt-1 text-[10.5px] leading-relaxed text-text-3">{item.description}</div></div><span className="py-glass-pill shrink-0 capitalize text-accent-text">{item.tier}</span></div><div className="mt-3 text-[9px] uppercase tracking-[.1em] text-text-3">{item.category} · {new Date(item.unlockedAt).toLocaleDateString()}</div></article>)}</div> : <Empty text="No achievements yet. Complete meaningful actions and Project You+ will record the first provable unlock date." />}
+      <AchievementGallery definitions={ACHIEVEMENTS} earned={state.achievements}/>
     </Section>
 
     <Section title="Recent wins" sub="A filtered view of meaningful events from your existing history.">

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/types";
 import { toggleTaskComplete } from "@/lib/actions/tasks";
+import { emitFeedback } from "@/lib/celebrations/client";
 
 const tierStyles: Record<Task["tier"], string> = {
   critical: "bg-danger/10 text-danger",
@@ -28,6 +29,7 @@ export function PriorityList({ tasks }: PriorityListProps) {
     const willBeCompleted = !next.has(task.id);
     willBeCompleted ? next.add(task.id) : next.delete(task.id);
     setCompletedIds(next);
+    if (willBeCompleted) emitFeedback("task");
     startTransition(() => {
       void toggleTaskComplete(task.id, willBeCompleted);
     });
