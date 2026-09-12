@@ -40,7 +40,7 @@ jobs:
       - name: Connected onboarding flow
         env:
           LIVE_ONBOARDING_BASE_URL: https://project-you-plus-5xanslbfq-miguelbinet-9644.vercel.app
-        run: npx playwright test tests/e2e/onboarding-live.spec.ts --project=chromium
+        run: npx playwright test tests/e2e/onboarding-live.spec.ts --project=desktop-chromium
       - name: Upload QA evidence
         if: always()
         uses: actions/upload-artifact@v4
