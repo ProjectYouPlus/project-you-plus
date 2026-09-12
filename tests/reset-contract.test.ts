@@ -5,6 +5,7 @@ import path from "node:path";
 
 const migration = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/20260912143000_seven_day_project_you_reset_v1.sql"), "utf8");
 const hardening = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/20260912144500_reset_private_event_boundary.sql"), "utf8");
+const performanceHardening = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/20260912150000_reset_rls_performance_hardening.sql"), "utf8");
 const service = fs.readFileSync(path.join(process.cwd(), "lib/reset/service.ts"), "utf8");
 
 test("Reset persistence is idempotent per enrollment and local date", () => {
@@ -18,6 +19,13 @@ test("Reset tables enforce own-row RLS", () => {
     assert.match(migration, new RegExp(`alter table public\\.${table} enable row level security`, "i"));
   }
   assert.match(migration, /auth\.uid\(\)\s*=\s*user_id/i);
+});
+
+test("Reset RLS uses cached auth.uid evaluation and covers the Weekly Review foreign key", () => {
+  assert.match(performanceHardening, /reset_enrollments_weekly_review_idx/i);
+  assert.match(performanceHardening, /on\s+public\.reset_enrollments\(weekly_review_id\)/i);
+  assert.match(performanceHardening, /\(select\s+auth\.uid\(\)\)\s*=\s*user_id/i);
+  assert.match(performanceHardening, /requested_by\s*=\s*\(select\s+auth\.uid\(\)\)/i);
 });
 
 test("auto enrollment only follows initial completed activated onboarding", () => {
