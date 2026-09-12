@@ -7,38 +7,49 @@ import { publishDueInstagramContent } from "@/lib/marketing/instagram-worker";
 
 export const maxDuration = 60;
 
+type RuntimeMode = "agents" | "provider" | "publish" | "all";
+
 export async function POST(request: Request) {
   const admin = createAdminClient();
   const authorized = await verifyRuntimeToken(admin, request.headers.get("authorization"));
   if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const requestedMode = new URL(request.url).searchParams.get("mode") || "all";
+  const mode: RuntimeMode = ["agents", "provider", "publish", "all"].includes(requestedMode) ? requestedMode as RuntimeMode : "all";
   const ownerIds = await getMarketingOwnerIds(admin);
   const owners: Array<Record<string, unknown>> = [];
 
   for (const ownerId of ownerIds.slice(0, 5)) {
     const ownerResult: Record<string, unknown> = { ownerId };
-    try {
-      ownerResult.agents = await processMarketingAgentQueueForOwner(ownerId, 2);
-    } catch (error) {
-      ownerResult.agentError = error instanceof Error ? error.message : "Agent runtime failed";
+
+    if (mode === "agents" || mode === "all") {
+      try {
+        ownerResult.agents = await processMarketingAgentQueueForOwner(ownerId, mode === "agents" ? 2 : 1);
+      } catch (error) {
+        ownerResult.agentError = error instanceof Error ? error.message : "Agent runtime failed";
+      }
     }
 
-    try {
-      ownerResult.higgsfield = await processHiggsfieldQueueForOwner(ownerId, 2);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Higgsfield runtime failed";
-      ownerResult.higgsfield = message.includes("not connected") ? [] : [{ status: "error", error: message }];
+    if (mode === "provider" || mode === "all") {
+      try {
+        ownerResult.higgsfield = await processHiggsfieldQueueForOwner(ownerId, mode === "provider" ? 2 : 1);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Higgsfield runtime failed";
+        ownerResult.higgsfield = message.includes("not connected") ? [] : [{ status: "error", error: message }];
+      }
     }
 
-    try {
-      ownerResult.instagram = await publishDueInstagramContent(ownerId, 2);
-    } catch (error) {
-      ownerResult.instagramError = error instanceof Error ? error.message : "Instagram publishing runtime failed";
+    if (mode === "publish" || mode === "all") {
+      try {
+        ownerResult.instagram = await publishDueInstagramContent(ownerId, 1);
+      } catch (error) {
+        ownerResult.instagramError = error instanceof Error ? error.message : "Instagram publishing runtime failed";
+      }
     }
     owners.push(ownerResult);
   }
 
-  return NextResponse.json({ ok: true, processedOwners: owners.length, owners, ranAt: new Date().toISOString() });
+  return NextResponse.json({ ok: true, mode, processedOwners: owners.length, owners, ranAt: new Date().toISOString() });
 }
 
 async function verifyRuntimeToken(admin: ReturnType<typeof createAdminClient>, authorization: string | null) {
