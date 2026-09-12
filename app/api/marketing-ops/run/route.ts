@@ -5,8 +5,9 @@ import { MARKETING_AGENT_MAP, type MarketingAgentId } from "@/lib/marketing/agen
 import { checkMarketingRunLimit, MARKETING_DEPARTMENT_DAILY_LIMIT, utcDayStart } from "@/lib/marketing/run-limits";
 import { requireMarketingOwner } from "@/lib/marketing/server";
 
-const AGENT_DAILY_LIMIT = 12;
-const AGENT_COOLDOWN_MS = 30_000;
+const AGENT_DAILY_LIMIT = 40;
+const AGENT_COOLDOWN_MS = 5_000;
+const MARKETING_MAX_CONCURRENT = 3;
 
 export async function POST(request: Request) {
   const { supabase, user, allowed } = await requireMarketingOwner();
@@ -30,11 +31,13 @@ export async function POST(request: Request) {
       .eq("owner_id", user.id)
       .gte("created_at", utcDayStart())
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(200);
     if (runsError) throw runsError;
     const departmentDecision = checkMarketingRunLimit(todayRuns || [], {
       dailyLimit: MARKETING_DEPARTMENT_DAILY_LIMIT,
-      cooldownMs: 10_000,
+      cooldownMs: 0,
+      maxConcurrent: MARKETING_MAX_CONCURRENT,
+      activeWindowMs: 5 * 60_000,
     });
     if (!departmentDecision.allowed) {
       return NextResponse.json(
@@ -46,6 +49,8 @@ export async function POST(request: Request) {
     const decision = checkMarketingRunLimit(agentRuns, {
       dailyLimit: AGENT_DAILY_LIMIT,
       cooldownMs: AGENT_COOLDOWN_MS,
+      maxConcurrent: 1,
+      activeWindowMs: 5 * 60_000,
     });
     if (!decision.allowed) {
       return NextResponse.json(
@@ -60,18 +65,12 @@ export async function POST(request: Request) {
       status: "running",
       objective: body.objective || null,
       context: body.context || null,
-      metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role },
+      started_at: new Date().toISOString(),
+      metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role, execution_provider: "openai" },
     }).select("id").single();
-    if (runError?.code === "23505") {
-      return NextResponse.json(
-        { error: "The Growth Department already has a run in progress.", retryAfterSeconds: 60 },
-        { status: 429, headers: { "Retry-After": "60" } }
-      );
-    }
     if (runError) throw runError;
     runId = run.id;
 
-    // Reserve the estimate before the AI call so failures and retries cannot bypass the monthly cap.
     await recordEstimatedSpend(supabase, user.id, "growth", 2, agentId, "marketing_agent_run");
 
     const task = [
@@ -92,7 +91,8 @@ export async function POST(request: Request) {
     const { error: updateError } = await supabase.from("marketing_agent_runs").update({
       status: "review",
       output,
-      metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role },
+      finished_at: new Date().toISOString(),
+      metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role, execution_provider: "openai" },
     }).eq("id", runId);
     if (updateError) throw updateError;
 
@@ -110,10 +110,12 @@ export async function POST(request: Request) {
     if (runId) {
       await supabase.from("marketing_agent_runs").update({
         status: "failed",
-        metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role, error: message },
+        finished_at: new Date().toISOString(),
+        error_message: message,
+        metadata: { type: "marketing_agent_run", agent_name: agent.name, role: agent.role, execution_provider: "openai", error: message },
       }).eq("id", runId);
     }
-    const status = message.includes("turned off") || message.includes("budget reached") ? 429 : 500;
+    const status = message.includes("turned off") || message.includes("budget reached") || message.includes("execution lanes") ? 429 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
