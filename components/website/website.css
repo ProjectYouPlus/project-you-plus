@@ -22,12 +22,18 @@ html:has(.youplus-site){scroll-behavior:smooth;scroll-padding-top:76px;backgroun
 @media(scripting:none) and (max-width:799px){.story-chapter{display:block}}
 .youplus-site #beta-form{scroll-margin-top:36px}
 
-/* Quiet violet light behind the story; driven only by the existing scroll frame. */
+/* Layered light follows scroll with a short, frame-independent settle. */
 .scroll-atmosphere{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;contain:strict}
-.atmosphere-light{position:absolute;inset:-20%;background:radial-gradient(ellipse at 78% 32%,rgba(139,92,246,.14),transparent 46%),radial-gradient(ellipse at 18% 78%,rgba(114,87,176,.065),transparent 42%);will-change:transform}
+.atmosphere-light{position:absolute;inset:-30%;background:radial-gradient(ellipse at 72% 35%,rgba(124,81,207,.25),transparent 43%),radial-gradient(ellipse at 25% 76%,rgba(171,145,221,.09),transparent 38%);will-change:transform}
+.atmosphere-sweep{position:absolute;left:-30%;top:-10%;width:160%;height:120%;background:radial-gradient(ellipse 48% 4% at 50% 50%,rgba(223,202,255,.14),rgba(163,122,227,.07) 35%,transparent 100%);will-change:transform;transform:rotate(-26deg)}
 .youplus-site:has(.scroll-atmosphere) .connected-section{background:rgba(10,9,15,.65)}
 .youplus-site:has(.scroll-atmosphere) .learning-section{background:rgba(11,9,17,.65)}
 .youplus-site:has(.scroll-atmosphere) .highlights-section{background:rgba(12,11,18,.65)}
 .beta-form>.form-submit{margin-top:30px}
-@media(max-width:799px){.atmosphere-light{opacity:.7}}
+@media(max-width:799px){.atmosphere-light{opacity:.85}.atmosphere-sweep{opacity:.8}}
 @media(prefers-reduced-motion:reduce){.scroll-atmosphere{display:none}}
+
+.learning-equation{display:flex;align-items:center;justify-content:center;gap:22px}
+.learning-equation span{color:inherit;padding:0}
+.learning-equation span+span{border-left:1px solid #625273;padding-left:22px}
+@media(max-width:799px){.learning-equation{gap:13px}.learning-equation span+span{padding-left:13px}}

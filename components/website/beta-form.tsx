@@ -16,13 +16,13 @@ export function BetaForm() {
       setStatus(body.status); requestAnimationFrame(() => result.current?.focus());
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Connection interrupted. Please try again."); setStatus("idle"); }
   }
-  if (status === "joined" || status === "already_joined") return <div className="beta-result" ref={result} tabIndex={-1} role="status"><span className="result-check" aria-hidden="true">✓</span><h3>{status === "joined" ? "You’re on the list." : "You’re already on the list."}</h3><p>{status === "joined" ? "We’ll let you know when your private beta access is ready." : "We’ll keep you updated as private beta access expands."}</p><p className="fine-print">Private beta members will receive founding-member benefits at launch.</p></div>;
+  if (status === "joined" || status === "already_joined") return <div className="beta-result" ref={result} tabIndex={-1} role="status"><h3>{status === "joined" ? "You’re on the list." : "You’re already on the list."}</h3><p>{status === "joined" ? "We’ll let you know when your private beta access is ready." : "We’ll keep you updated as private beta access expands."}</p><p className="fine-print">Private beta members will receive founding-member benefits at launch.</p></div>;
   return <form className="beta-form" onSubmit={submit} onFocusCapture={start} aria-label="Join the private beta">
     <div className="form-pair"><label htmlFor="beta-name">Name<input id="beta-name" name="name" required maxLength={100} autoComplete="name" placeholder="Your name" /></label><label htmlFor="beta-email">Email<input id="beta-email" name="email" type="email" required maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false} inputMode="email" placeholder="you@example.com" /></label></div>
     <label htmlFor="beta-goal">What do you most want to improve? <span>Optional</span><textarea id="beta-goal" name="improvement_goal" maxLength={1000} rows={2} placeholder="Discipline, health, finances, career, consistency…" /></label>
     <div className="form-honeypot" aria-hidden="true"><label htmlFor="beta-website">Leave this empty<input id="beta-website" name="website" tabIndex={-1} autoComplete="off" /></label></div>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <button className="site-button form-submit" type="submit" disabled={status === "saving"} onClick={() => track("bottom_beta_cta_click")}>{status === "saving" ? "Saving your place…" : "Join the private beta"}<span aria-hidden="true">↗</span></button>
+    <button className="site-button form-submit" type="submit" disabled={status === "saving"} onClick={() => track("bottom_beta_cta_click")}>{status === "saving" ? "Saving your place…" : "Join the private beta"}</button>
     <p className="fine-print">Private beta members will receive access to exclusive founding-member pricing at launch.</p>
     <p className="privacy-note">Your details are used for beta access and product research. <a href="#privacy">How we use your information</a></p>
   </form>;
