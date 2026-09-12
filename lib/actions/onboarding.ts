@@ -18,14 +18,9 @@ type LegacyGenerationResult =
   | { ok:false; error:string }
   | { ok:true; proposal:OnboardingProposal; generationState:{overall:string;modules:Record<string,string>}; usedFallback?:boolean };
 
-/**
- * The existing questionnaire still owns onboarding. Only its generation handoff changes:
- * answers are passed into the shared-context Auto-Build engine, then the user is routed
- * to the richer proposal review surface. Failure keeps the user in the existing flow.
- */
+/** The questionnaire stays unchanged; only its generation handoff routes into Auto-Build v3. */
 export async function generateOnboardingPlan(sessionId:string):Promise<LegacyGenerationResult>{
   const result=await generateAutoBuiltSystem(sessionId);
-  if(!result.ok)return result;
+  if(!("proposal" in result))return {ok:false,error:result.error};
   redirect(`/onboarding/system?session=${encodeURIComponent(sessionId)}`);
-  return {ok:true,proposal:result.proposal as unknown as OnboardingProposal,generationState:result.generationState,usedFallback:result.usedFallback};
 }
