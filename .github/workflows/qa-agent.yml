@@ -14,11 +14,14 @@ concurrency:
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: qa-placeholder-key
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      LIVE_ONBOARDING_BASE_URL: https://project-you-plus-git-feature-production-c11e96-miguelbinet-9644.vercel.app
+      LIVE_ONBOARDING_EMAIL: ${{ secrets.ONBOARDING_E2E_EMAIL }}
+      LIVE_ONBOARDING_PASSWORD: ${{ secrets.ONBOARDING_E2E_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,12 +30,19 @@ jobs:
           cache: npm
       - run: npm install
       - run: npx playwright install --with-deps chromium webkit
+      - name: Lint
+        run: npm run lint
+      - name: Unit and integration tests
+        run: npm test
       - name: Typecheck
         run: npm run typecheck
       - name: Production build
         run: npm run build
       - name: Browser regression
         run: npm run test:e2e
+      - name: Connected onboarding flow
+        if: ${{ env.LIVE_ONBOARDING_EMAIL != '' && env.LIVE_ONBOARDING_PASSWORD != '' }}
+        run: npx playwright test tests/e2e/onboarding-live.spec.ts --project=desktop-chromium
       - name: Upload QA evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,22 @@
+.py-textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: none;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px 16px;
+  color: var(--text-1);
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.py-textarea::placeholder { color: var(--text-3); }
+.py-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .py-animate-in,
+  .py-liquid-button,
+  [class*="transition"] { animation: none !important; transition-duration: 0.01ms !important; }
+}
