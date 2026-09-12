@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function useHabitMinimumVersion(habitId:string){
+export async function recordHabitMinimumVersion(habitId:string){
   if(!habitId)return {ok:false as const,error:"Habit not found."};
   const supabase=await createClient();
   const {data:{user}}=await supabase.auth.getUser();
