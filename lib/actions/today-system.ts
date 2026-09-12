@@ -31,7 +31,7 @@ export async function explainBlockedSystemTask(taskId:string,reason:string){
   revalidatePath("/coach");revalidatePath("/review");return {ok:true as const};
 }
 
-export async function useSystemMinimumVersion(taskId:string){
+export async function recordSystemMinimumVersion(taskId:string){
   const auth=await getOwnedTask(taskId);if(!auth.ok)return auth;const {supabase,user,task}=auth;if(!task.minimum_version)return fail("This action does not have a minimum version yet.");
   await appendEvidence(supabase,user.id,"minimum_version.used",taskId,{domain:task.domain??null,action_kind:task.action_kind??"task"});revalidatePath("/coach");revalidatePath("/review");return {ok:true as const,minimumVersion:String(task.minimum_version)};
 }
