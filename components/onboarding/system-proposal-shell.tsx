@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ProjectYouLogo } from "@/components/brand/project-you-logo";
+import { SystemProposalHardeningControls } from "@/components/onboarding/system-proposal-hardening-controls";
 import { SystemProposalReview } from "@/components/onboarding/system-proposal-review";
 import type { AutoBuildSession } from "@/lib/data/onboarding-system";
 import type { SystemProposal } from "@/lib/onboarding/system-schema";
@@ -16,7 +17,7 @@ export function SystemProposalShell({session}:{session:AutoBuildSession}){
   const [summary,setSummary]=useState<Summary|null>(null);
   return <main className="min-h-[100dvh] bg-bg text-text-1"><div className="mx-auto min-h-[100dvh] w-full max-w-[520px] px-5 pt-[max(20px,env(safe-area-inset-top))] sm:px-7">
     <header className="mb-6 flex items-center justify-center"><ProjectYouLogo className="text-[15px] font-semibold" markClassName="h-8 w-8"/></header>
-    {ready?<SystemReady proposal={proposal} summary={summary}/>:<SystemProposalReview sessionId={session.id} proposal={proposal} onProposal={setProposal} onActivated={result=>{setSummary(result.summary??null);setReady(true);}}/>}
+    {ready?<SystemReady proposal={proposal} summary={summary}/>:<><SystemProposalHardeningControls sessionId={session.id} proposal={proposal} existingMatches={session.existingMatches} onProposal={setProposal}/><SystemProposalReview sessionId={session.id} proposal={proposal} onProposal={setProposal} onActivated={result=>{setSummary(result.summary??null);setReady(true);}}/></>}
   </div></main>;
 }
 
