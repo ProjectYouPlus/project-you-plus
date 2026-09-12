@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logHabitToday } from "@/lib/actions/habits";
-import { useHabitMinimumVersion } from "@/lib/actions/system-habits";
+import { recordHabitMinimumVersion } from "@/lib/actions/system-habits";
 import type { Habit } from "@/lib/types";
 
 export function SystemHabitCard({habit,goalTitle}:{habit:Habit;goalTitle?:string}){
@@ -17,7 +17,7 @@ export function SystemHabitCard({habit,goalTitle}:{habit:Habit;goalTitle?:string
     {error&&<div role="alert" className="mt-2 text-[10px] text-red-200">{error}</div>}
     <div className="mt-3 flex gap-2">
       <button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);await logHabitToday(habit.id);router.refresh();})} className="min-h-10 flex-1 rounded-xl bg-accent text-[10.5px] font-semibold text-white disabled:opacity-50">{pending?"Saving…":"Complete"}</button>
-      {habit.minimumVersion&&<button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);const result=await useHabitMinimumVersion(habit.id);if(!result.ok){setError(result.error);return;}setMinimum(true);})} className="min-h-10 rounded-xl border border-white/[.08] px-3 text-[10.5px] font-semibold text-text-2 disabled:opacity-50">Minimum version</button>}
+      {habit.minimumVersion&&<button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);const result=await recordHabitMinimumVersion(habit.id);if(!result.ok){setError(result.error);return;}setMinimum(true);})} className="min-h-10 rounded-xl border border-white/[.08] px-3 text-[10.5px] font-semibold text-text-2 disabled:opacity-50">Minimum version</button>}
     </div>
   </div>;
 }
