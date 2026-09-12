@@ -19,6 +19,20 @@ export interface OnboardingBlueprint {
   activatedAt?: string;
 }
 
+export interface ActiveSystemContext {
+  proposalId?: string;
+  sourceContextVersion?: string;
+  generatorVersion?: string;
+  weeklyReview?: Record<string, unknown> | null;
+  workload?: Record<string, unknown> | null;
+  activatedAt?: string;
+  contextDefinitions?: {
+    metrics: Array<{ id:string; goalId:string; name:string; unit:string; direction:string; metricType:string; entryFrequency:string; dataSource:string; baseline:number|null; targetValue:number|null; targetLabel:string|null; needsConfirmation:boolean }>;
+    milestones: Array<{ id:string; goalId:string; title:string; targetValue:number|null; unit:string|null; targetDate:string|null; sortOrder:number; status:string }>;
+    weeklyReview: { day:number; time:string; remindersEnabled:boolean } | null;
+  };
+}
+
 export interface Profile {
   createdAt?: string;
   id: string;
@@ -44,13 +58,14 @@ export interface Profile {
     moneyGoals?: string[];
     connectionPrefs?: string[];
     onboarding?: OnboardingBlueprint;
+    activeSystem?: ActiveSystemContext;
   } | null;
 }
 
 export interface Goal { id: string; title: string; category: "fitness" | "finance" | "career" | "learning" | "health" | "custom"; target: string | null; deadline: string | null; progress: number; vision12mo: string | null; objective90day: string | null; status: "active" | "paused" | "completed" | "abandoned"; }
-export interface Task { id: string; goalId: string | null; title: string; tier: Tier; dueAt: string | null; completedAt: string | null; meta?: string; }
+export interface Task { id: string; goalId: string | null; title: string; tier: Tier; dueAt: string | null; completedAt: string | null; meta?: string; domain?:string|null; actionKind?:string|null; preferredDays?:number[]; preferredTime?:string|null; durationMinutes?:number|null; minimumVersion?:string|null; recoveryRule?:string|null; evidenceType?:string|null; }
 export interface CalendarEvent { id: string; title: string; startAt: string; endAt: string; location: string | null; isCurrent?: boolean; }
-export interface Habit { id: string; goalId?: string | null; title: string; targetFrequency: "daily" | "weekly" | "n_per_week"; consistencyPct: number; streakDays: number; }
+export interface Habit { id: string; goalId?: string | null; title: string; targetFrequency: "daily" | "weekly" | "n_per_week"; consistencyPct: number; streakDays: number; preferredDays?:number[]; preferredTime?:string|null; durationMinutes?:number|null; minimumVersion?:string|null; recoveryRule?:string|null; evidenceType?:string|null; targetPerWeek?:number|null; domain?:string|null; }
 export interface HealthSnapshot { sleepMinutes: number | null; sleepTargetMinutes: number | null; recoveryPct: number | null; steps: number | null; stepsTarget: number | null; waterCups: number | null; waterTargetCups: number | null; workoutStatus: "completed" | "scheduled" | "missed" | "not_scheduled"; nutritionStatus: "on_track" | "over" | "under" | "unavailable" | "logged"; }
 export interface MoneySnapshot { spentTodayCents: number; weeklyBudgetPctUsed: number; nextBillLabel: string | null; savingsGoalPct: number; }
 export interface AIInsight { id: string; domain: "health" | "finance" | "fitness" | "productivity"; type: "observation" | "recommendation" | "action"; content: string; actionTaken: boolean; }
