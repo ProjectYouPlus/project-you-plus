@@ -16,7 +16,7 @@ Canonical: https://projectyouplus.com. Vercel redirects www to the apex using HT
 
 Project: `ehyewrldhttmijizdwhs` (Project You+).
 
-`public.beta_waitlist` stores name, normalized unique email, optional improvement goal, optional yes/maybe/no willingness to pay, first-visit source and UTM attribution, and waiting status. The $19.99 question is research only. No email service is called and no payment is collected.
+`public.beta_waitlist` stores name, normalized unique email, optional improvement goal, optional yes/maybe/no willingness to pay, first-visit source and UTM attribution, and waiting status. The public form no longer asks the $19.99 question. Historical optional pricing responses and backend support remain intact. No email service is called and no payment is collected.
 
 `public.website_events` stores anonymous visit IDs and funnel events. `waitlist_submitted` and pricing responses are written in the same database transaction as the new signup. Duplicates do not increment conversion or overwrite an existing signup. Client events use persistent request IDs for retry deduplication. Session storage preserves first-touch attribution across refreshes; blocked storage falls back to in-memory attribution.
 
@@ -29,3 +29,9 @@ Use the Supabase dashboard to inspect submissions. Run `docs/website/conversion.
 `npm run lint`, `npm run typecheck`, `npm run build`, `npx tsx --test tests/website.test.ts`.
 
 `tests/e2e/public-website.spec.ts` covers navigation, mobile overflow, reduced motion, form accessibility and request failure recovery. Live validation also submits reserved `@example.invalid` test addresses, verifies database rows/atomic conversion/duplicates, then removes only those test rows and sessions. No automatic email is sent.
+
+## Original website restore point
+
+The owner-approved original is preserved in GitHub at `archive/public-website-original-2026-09-12`, commit `f37211f66312abb0ac393add351d49e1d9d0e429`. Its production deployment is `dpl_J6qx5TEVL12vthYGd3URaUpVAHcA` (`project-you-plus-p31nkzmrz-miguelbinet-9644.vercel.app`).
+
+To remove only the experimental background, set `WEBSITE_BACKGROUND_MOTION` to false in `lib/website/presentation.ts` and redeploy. To restore the entire original, restore the website files from the named branch and deploy, preserving any subsequent application work and all waitlist submissions. The existing original Vercel deployment also provides an immediate full-deployment rollback if no later application changes must be retained.

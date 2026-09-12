@@ -7,6 +7,7 @@ export function WebsiteMotion() {
     const root = document.querySelector<HTMLElement>(".youplus-site"); if (!root) return;
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
+    const atmosphere = root.querySelector<HTMLElement>(".atmosphere-light");
     const hero = root.querySelector<HTMLElement>(".site-hero");
     const scenes = Array.from(root.querySelectorAll<HTMLElement>("[data-scene]"));
     const story = root.querySelector<HTMLElement>(".product-story");
@@ -21,6 +22,10 @@ export function WebsiteMotion() {
       if (media.matches) { root?.removeAttribute("data-motion"); return; }
       root?.setAttribute("data-motion", "true");
       const height = innerHeight;
+      if (atmosphere) {
+        const phase = scrollY / 1800;
+        atmosphere.style.transform = `translate3d(${Math.sin(phase) * 12}vw, ${Math.sin(phase * .7) * 10}vh, 0) rotate(${Math.sin(phase * .5) * 12}deg)`;
+      }
       const hp = hero ? clamp(-hero.getBoundingClientRect().top / (height * 1.2)) : 0;
       root?.style.setProperty("--hero-progress", String(hp));
       scenes.forEach(scene => { const box = scene.getBoundingClientRect(); if (box.bottom > -height && box.top < height * 2) scene.style.setProperty("--scene", String(clamp((height * .8 - box.top) / Math.max(height, box.height * .8)))); });

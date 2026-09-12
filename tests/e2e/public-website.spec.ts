@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("public story, navigation and accessible optional beta research", async ({ page }) => {
+test("public story, navigation and accessible beta signup", async ({ page }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto("/?utm_source=instagram&utm_medium=social&utm_campaign=private_beta");
   await expect(page).toHaveTitle("Project You+ — Your AI Life Operating System");
@@ -10,7 +10,7 @@ test("public story, navigation and accessible optional beta research", async ({ 
   await expect(page.locator("#beta-name")).toBeInViewport();
   await expect(page.locator("#beta-name")).toHaveAttribute("required", "");
   await expect(page.locator("#beta-email")).toHaveAttribute("type", "email");
-  await expect(page.locator('input[name="willingness_to_pay"]:checked')).toHaveCount(0);
+  await expect(page.locator('input[name="willingness_to_pay"]')).toHaveCount(0);
   await expect(page.locator(".form-submit")).toBeEnabled();
   await expect(page.locator(".youplus-site")).toBeVisible();
   const size = await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,view:innerWidth}));
