@@ -6,7 +6,11 @@ const SERVICE_AUTH_PATHS = new Set([
   "/api/marketing-ops/runtime/tick",
 ]);
 
+const WEBSITE_PUBLIC_PATHS = new Set(["/", "/api/beta-waitlist", "/api/site-events", "/robots.txt", "/sitemap.xml"]);
+
 export async function middleware(request: NextRequest) {
+  // The public website has no member session dependency. App authorization remains below.
+  if (WEBSITE_PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
   // Service-to-service runtime endpoints perform their own cryptographic bearer
   // validation in the route handler. They must reach that handler without a user session.
   if (SERVICE_AUTH_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();

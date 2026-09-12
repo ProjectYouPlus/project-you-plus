@@ -28,3 +28,8 @@ pnpm-debug.log*
 
 .env*
 *.tsbuildinfo
+
+# Local Supabase CLI metadata and browser verification output
+supabase/.temp/
+test-results/
+playwright-report/
