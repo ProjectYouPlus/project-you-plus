@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       connected_at: new Date().toISOString(),
       metadata: {
         api_mode: "cloud",
-        image_model_path: higgsfieldImageModelPath(secret),
+        image_model_path: higgsfieldImageModelPath(),
         video_model_path: videoModelPath || null,
         image_generation_ready: true,
         video_generation_ready: Boolean(videoModelPath),
