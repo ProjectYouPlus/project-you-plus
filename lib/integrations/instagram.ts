@@ -108,14 +108,36 @@ export async function syncInstagramForOwner(userId: string) {
   return { username: profile.username || null, followers: profile.followers_count ?? null, media: rows.length };
 }
 
-export async function publishInstagramContent(userId: string, item: { id: string; format: string; caption?: string | null; metrics?: Record<string, unknown> | null }) {
+export async function publishInstagramContent(userId: string, item: { id: string; format: string; caption?: string | null; asset_url?: string | null; metrics?: Record<string, unknown> | null }) {
   const secret = await getInstagramSecret(userId);
-  const mediaUrl = String(item.metrics?.media_url || "");
-  if (!/^https:\/\//.test(mediaUrl)) throw new Error("Approved content needs a public HTTPS media_url before publishing");
+  const mediaUrl = String(item.asset_url || item.metrics?.media_url || "");
+  if (!/^https:\/\//.test(mediaUrl)) throw new Error("Approved content needs a public HTTPS asset_url before publishing");
+
   const create = new URLSearchParams({ caption: item.caption || "", access_token: secret.access_token });
-  if (item.format === "reel") { create.set("media_type", "REELS"); create.set("video_url", mediaUrl); }
-  else create.set("image_url", mediaUrl);
+  if (item.format === "reel") {
+    create.set("media_type", "REELS");
+    create.set("video_url", mediaUrl);
+  } else {
+    create.set("image_url", mediaUrl);
+  }
+
   const container = await instagramFetch<{ id: string }>(`/${secret.instagram_user_id}/media`, secret.access_token, { method: "POST", body: create });
-  const publish = await instagramFetch<{ id: string }>(`/${secret.instagram_user_id}/media_publish`, secret.access_token, { method: "POST", body: new URLSearchParams({ creation_id: container.id, access_token: secret.access_token }) });
+  await waitForInstagramContainer(container.id, secret.access_token);
+
+  const publish = await instagramFetch<{ id: string }>(`/${secret.instagram_user_id}/media_publish`, secret.access_token, {
+    method: "POST",
+    body: new URLSearchParams({ creation_id: container.id, access_token: secret.access_token }),
+  });
   return publish.id;
+}
+
+async function waitForInstagramContainer(containerId: string, accessToken: string) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const status = await instagramFetch<{ status_code?: string; status?: string }>(`/${containerId}?fields=status_code,status`, accessToken);
+    const code = String(status.status_code || status.status || "").toUpperCase();
+    if (["FINISHED", "PUBLISHED"].includes(code)) return;
+    if (["ERROR", "EXPIRED"].includes(code)) throw new Error(`Instagram media container ended with status ${code}`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  throw new Error("Instagram media container was not ready to publish in time");
 }
