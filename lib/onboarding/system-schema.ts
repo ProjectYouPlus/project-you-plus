@@ -27,7 +27,7 @@ export type SystemProposal = {
   generationVersion:string; generatedAt:string; status:"draft";
   habits:Array<{clientId:string;title:string;frequency:"daily"|"weekly"|"n_per_week";goalClientId?:string|null;rationale:string;minimumVersion?:string|null}>;
   priorities:Array<{clientId:string;title:string;goalClientId?:string|null;dueWindow:"today"|"this_week";rationale:string}>;
-  healthPlan:null|{title:string;goal:string;daysPerWeek:number;sessionMinutes:number;experience:"beginner"|"intermediate"|"advanced"|"returning";schedule:Array<{key:string;day:string;dayIndex:number;title:string;focus?:string;duration:number;time?:string|null}>;rationale:string};
+  healthPlan:null|{title:string;goal:string;daysPerWeek:number;sessionMinutes:number;experience:string;schedule:Array<{key:string;day:string;dayIndex:number;title:string;focus?:string;duration:number;time?:string|null}>;rationale:string};
   financialFocus:null|{title:string;action:string;goalType:string;rationale:string;targetAmount?:number|null;currentAmount?:number|null;monthlyTarget?:number|null;weeklyEquivalent?:number|null;calculation?:string|null};
 };
 
@@ -64,7 +64,6 @@ export function validateSystemProposal(value:unknown,answers?:OnboardingAnswers)
   if(proposal.workload.activeGoalCount!==activeGoals.length)issues.push("workload_goal_count");if(proposal.workload.dailyHabitCount>3)issues.push("workload_habit_count");if(!Number.isFinite(proposal.workload.weeklyMinutes)||proposal.workload.weeklyMinutes<0||proposal.workload.weeklyMinutes>7*24*60)issues.push("workload_minutes");
   if(answers){
     if(activeGoals.length>Math.min(3,answers.goals.length))issues.push("goal_source_count");
-    // A lighter plan may use fewer sessions than the stated maximum; it may never exceed it.
     if(proposal.healthPlan&&answers.health.trainingDaysPerWeek!=null&&proposal.healthPlan.daysPerWeek>answers.health.trainingDaysPerWeek)issues.push("health_frequency_exceeds_availability");
     if(proposal.healthPlan&&answers.health.workoutDurationMinutes!=null&&proposal.healthPlan.sessionMinutes>answers.health.workoutDurationMinutes)issues.push("health_duration_exceeds_preference");
     for(const goal of proposal.goals){const source=answers.goals.find(item=>item.clientId===goal.sourceGoalClientId);if(!source)issues.push(`goal:${goal.clientId}:missing_source`);if(goal.targetDate&&!source?.targetDate&&goal.domain!=="money")warnings.push(`unconfirmed_date:${goal.clientId}`);}
