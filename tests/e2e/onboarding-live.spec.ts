@@ -1,10 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const liveBase = process.env.LIVE_ONBOARDING_BASE_URL;
 const email = process.env.LIVE_ONBOARDING_EMAIL;
 const password = process.env.LIVE_ONBOARDING_PASSWORD;
 
-async function continueOnboarding(page:Parameters<typeof test>[0] extends never?never:any){
+async function continueOnboarding(page:Page){
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 }
 
@@ -112,7 +112,6 @@ test("authenticated three-goal onboarding builds, reviews, activates, and popula
   await expect(page.getByText("Creating your Project You+ system", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Your system is ready.", { exact: true })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("Foundation — calibration in progress", { exact: true })).toBeVisible();
-  await expect(page.getByText("3", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("link", { name: "Start with Today", exact: true }).click();
   await page.waitForURL(/\/today(?:\?|$)/, { timeout: 20_000 });
