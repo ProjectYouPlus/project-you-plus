@@ -217,10 +217,10 @@ export async function closeResetDay(input: { actions: ClosureActionInput[]; bloc
   const recovered = wasRecovery && ((result.completedCount + result.partialCount) > 0);
   const status: ResetDayStatus = recovered ? "recovered" : closeState(result);
   await supabase.from("reset_daily_snapshots").update({ day_status: status }).eq("id", snapshot.id);
-  const closures = await loadClosures(supabase, enrollment.id);
+  const closures: ClosureRow[] = await loadClosures(supabase, enrollment.id);
   await supabase.from("reset_enrollments").update({
     closed_day_count: closures.length,
-    completed_day_count: closures.filter((row) => Number(row.completion_percentage ?? 0) >= 100).length,
+    completed_day_count: closures.filter((row: ClosureRow) => Number(row.completion_percentage ?? 0) >= 100).length,
     recovery_count: recovered && !existing.data ? Number(enrollment.recovery_count ?? 0) + 1 : enrollment.recovery_count,
     updated_at: new Date().toISOString(),
   }).eq("id", enrollment.id);
@@ -545,8 +545,9 @@ async function ensureDayFiveAdjustment(supabase: any, enrollment: EnrollmentRow,
     return null;
   }
   const actions = asPlanned(snapshot.planned_actions), candidate = actions.find((item) => item.sourceType === "task" && item.sourceId && !item.isPrimary && !item.completed);
-  if (!candidate) return null;
-  const task = (await supabase.from("tasks").select("id,due_at,title").eq("id", candidate.sourceId).maybeSingle()).data;
+  if (!candidate?.sourceId) return null;
+  const candidateSourceId = candidate.sourceId;
+  const task = (await supabase.from("tasks").select("id,due_at,title").eq("id", candidateSourceId).maybeSingle()).data;
   if (!task?.due_at) return null;
   const nextDate = addLocalDays(snapshot.local_date, 1);
   const localClock = candidate.preferredTime ?? clockInTimezone(new Date(task.due_at), enrollment.timezone);
@@ -555,8 +556,8 @@ async function ensureDayFiveAdjustment(supabase: any, enrollment: EnrollmentRow,
     domain: "planner", observation: pattern.summary, supportingEvidence: [{ table: "reset_patterns", id: pattern.id, detail: `${pattern.observation_count} observations` }],
     reasonItMatters: pattern.why_it_matters ?? "Repeated friction can make the starting system harder to sustain.",
     suggestedAction: `Move “${candidate.title}” to tomorrow so today keeps its primary focus.`, expectedImpact: "Reduce today’s load without deleting the action or changing the goal.",
-    confidence: Number(pattern.confidence) >= 0.75 ? "high" : "medium", relatedEntities: [{ type: "task", id: candidate.sourceId, label: candidate.title }],
-    source: "coach", sourceAgent: "coach", dedupeKey: `reset:${enrollment.id}:day5-adjustment`, actionType: "task.reschedule", actionPayload: { taskId: candidate.sourceId, dueAt, resetEnrollmentId: enrollment.id },
+    confidence: Number(pattern.confidence) >= 0.75 ? "high" : "medium", relatedEntities: [{ type: "task", id: candidateSourceId, label: candidate.title }],
+    source: "coach", sourceAgent: "coach", dedupeKey: `reset:${enrollment.id}:day5-adjustment`, actionType: "task.reschedule", actionPayload: { taskId: candidateSourceId, dueAt, resetEnrollmentId: enrollment.id },
   });
   await appendEvent(supabase, enrollment.id, "reset.adjustment_proposed", { recommendation_id: recommendation.id, action_type: recommendation.actionType }, `reset.adjustment.proposed:${recommendation.id}`);
   await logOperation(supabase, "Coach adjustment prepared", "coach_adjustment", async () => "One evidence-based adjustment is ready for user review.");
@@ -582,14 +583,15 @@ async function loadTrajectory(supabase: any, enrollment: EnrollmentRow, recalcul
   }
   if (!progression) progression = await getStoredProgression();
   const comparison = compareScores({ starting: enrollment.starting_score == null ? null : Number(enrollment.starting_score), current: progression?.currentScore ?? null, startingVersion: enrollment.starting_score_version, currentVersion: RESET_SCORE_VERSION, startingCoverage: enrollment.starting_score_coverage, currentCoverage: progression?.coveragePct ?? null });
-  const [{ data: snapshots }, closures] = await Promise.all([supabase.from("reset_daily_snapshots").select("planned_actions").eq("enrollment_id", enrollment.id), loadClosures(supabase, enrollment.id)]);
-  const planned = (snapshots ?? []).flatMap((row: any) => asPlanned(row.planned_actions));
-  const eligible = closures.flatMap((row) => row.eligible_actions ?? []);
+  const { data: snapshots } = await supabase.from("reset_daily_snapshots").select("planned_actions").eq("enrollment_id", enrollment.id);
+  const closures: ClosureRow[] = await loadClosures(supabase, enrollment.id);
+  const planned: PlannedResetAction[] = (snapshots ?? []).flatMap((row: any) => asPlanned(row.planned_actions));
+  const eligible: any[] = closures.flatMap((row: ClosureRow) => row.eligible_actions ?? []);
   const completedKeys = new Set(eligible.filter((row: any) => row.status === "completed").map((row: any) => String(row.key)));
   const habitPlanned = eligible.filter((row: any) => String(row.key).startsWith("habit:")).length, habitCompleted = eligible.filter((row: any) => String(row.key).startsWith("habit:") && row.status === "completed").length;
   const workoutsPlanned = eligible.filter((row: any) => String(row.key).startsWith("workout:")).length, workoutsCompleted = eligible.filter((row: any) => String(row.key).startsWith("workout:") && row.status === "completed").length;
-  const financeActionsCompleted = planned.filter((action) => action.sourceType === "finance" && completedKeys.has(action.key)).length;
-  const actionsCompleted = closures.reduce((sum, row) => sum + Number(row.completed_count ?? 0), 0);
+  const financeActionsCompleted = planned.filter((action: PlannedResetAction) => action.sourceType === "finance" && completedKeys.has(action.key)).length;
+  const actionsCompleted = closures.reduce((sum: number, row: ClosureRow) => sum + Number(row.completed_count ?? 0), 0);
   const recoveryCount = Number(enrollment.recovery_count ?? 0);
   const positiveSignal = recoveryCount > 0 ? "You returned after a difficult day instead of restarting the week." : workoutsCompleted > 0 ? `You completed ${workoutsCompleted} scheduled training session${workoutsCompleted === 1 ? "" : "s"}.` : actionsCompleted > 0 ? `You completed ${actionsCompleted} planned action${actionsCompleted === 1 ? "" : "s"}.` : "You kept the system available for honest calibration.";
   const calibratingArea = closures.length < 4 ? "Daily consistency needs more closed days before confidence can increase." : habitPlanned > 0 && habitCompleted < habitPlanned ? "Habit consistency is still calibrating against the planned cadence." : "Project You+ is still calibrating which schedule windows are most reliable.";
@@ -618,28 +620,28 @@ async function ensureWeeklyReview(supabase: any, enrollment: EnrollmentRow, clos
       const win = completedTitle ? `Completed: ${completedTitle}` : close?.completed_count > 0 ? `${close.completed_count} planned action${close.completed_count === 1 ? "" : "s"} completed.` : null;
       return { day: index + 1, date, completionPercentage: close?.completion_percentage == null ? null : Number(close.completion_percentage), mainWin: win, mainBlocker: close?.main_blocker ?? null, recoveryAction: snap?.morning_summary?.recovery ? "Returned to a minimum plan." : null, closed: Boolean(close) };
     });
-    const flatActions = (snapshots ?? []).flatMap((row: any) => asPlanned(row.planned_actions).map((action) => ({ ...action, date: row.local_date })));
-    const taskPlanned = flatActions.filter((item) => ["task","finance"].includes(item.sourceType)).length;
-    const habitPlanned = flatActions.filter((item) => item.sourceType === "habit").length;
-    const workoutPlanned = flatActions.filter((item) => item.sourceType === "workout").length;
-    const eligibleRows = closures.flatMap((row) => (row.eligible_actions ?? []).map((item: any) => ({ ...item, date: row.local_date })));
+    const flatActions: Array<PlannedResetAction & { date: string }> = (snapshots ?? []).flatMap((row: any) => asPlanned(row.planned_actions).map((action: PlannedResetAction) => ({ ...action, date: String(row.local_date) })));
+    const taskPlanned = flatActions.filter((item: PlannedResetAction & { date: string }) => ["task","finance"].includes(item.sourceType)).length;
+    const habitPlanned = flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "habit").length;
+    const workoutPlanned = flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "workout").length;
+    const eligibleRows: any[] = closures.flatMap((row: ClosureRow) => (row.eligible_actions ?? []).map((item: any) => ({ ...item, date: row.local_date })));
     const isComplete = (row: any) => row.status === "completed";
-    const taskKeys = new Set(flatActions.filter((item) => ["task","finance"].includes(item.sourceType)).map((item) => item.key));
-    const habitKeys = new Set(flatActions.filter((item) => item.sourceType === "habit").map((item) => item.key));
-    const workoutKeys = new Set(flatActions.filter((item) => item.sourceType === "workout").map((item) => item.key));
-    const totalEligible = closures.reduce((sum, row) => sum + Number(row.eligible_count ?? 0), 0), totalCredits = closures.reduce((sum, row) => sum + Number(row.completed_count ?? 0) + Number(row.partial_count ?? 0) * .5, 0);
+    const taskKeys = new Set(flatActions.filter((item: PlannedResetAction & { date: string }) => ["task","finance"].includes(item.sourceType)).map((item: PlannedResetAction & { date: string }) => item.key));
+    const habitKeys = new Set(flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "habit").map((item: PlannedResetAction & { date: string }) => item.key));
+    const workoutKeys = new Set(flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "workout").map((item: PlannedResetAction & { date: string }) => item.key));
+    const totalEligible = closures.reduce((sum: number, row: ClosureRow) => sum + Number(row.eligible_count ?? 0), 0), totalCredits = closures.reduce((sum: number, row: ClosureRow) => sum + Number(row.completed_count ?? 0) + Number(row.partial_count ?? 0) * .5, 0);
     const habitBreakdown = new Map<string, { title:string; planned:number; completed:number; minimum:number }>();
-    for (const item of flatActions.filter((row) => row.sourceType === "habit")) { const current = habitBreakdown.get(item.key) ?? { title:item.title, planned:0, completed:0, minimum:0 }; current.planned += 1; habitBreakdown.set(item.key,current); }
+    for (const item of flatActions.filter((row: PlannedResetAction & { date: string }) => row.sourceType === "habit")) { const current = habitBreakdown.get(item.key) ?? { title:item.title, planned:0, completed:0, minimum:0 }; current.planned += 1; habitBreakdown.set(item.key,current); }
     for (const row of eligibleRows.filter((item:any) => habitKeys.has(item.key))) { const current = habitBreakdown.get(row.key); if (!current) continue; if (row.status === "completed") current.completed += 1; if (row.status === "minimum") current.minimum += 1; }
     const financeGoal = reviewContext.goals.find((goal) => goal.status === "active" && goal.category === "finance") ?? null;
     const bodyEntries = (healthMetrics ?? []).map((row:any) => ({ metricType: row.metric_type, value: Number(row.value), recordedAt: row.recorded_at }));
     const details = {
       resetVersion: RESET_VERSION,
       trajectory: { startingScore: enrollment.starting_score, currentScore: progression.currentScore, netMovement: enrollment.starting_score == null ? null : progression.currentScore - Number(enrollment.starting_score), confidence: progression.coveragePct >= 75 ? "medium" : "low", stage: progression.stage, status: progression.status },
-      taskCompletion: { planned: taskPlanned, completed: eligibleRows.filter((row) => taskKeys.has(row.key) && isComplete(row)).length, partial: eligibleRows.filter((row) => taskKeys.has(row.key) && ["partial","minimum"].includes(row.status)).length, rescheduled: eligibleRows.filter((row) => taskKeys.has(row.key) && row.status === "rescheduled").length, blocked: eligibleRows.filter((row) => taskKeys.has(row.key) && row.status === "blocked").length, completionPercentage: totalEligible ? Math.round(totalCredits / totalEligible * 100) : null },
-      habitConsistency: { planned: habitPlanned, completed: eligibleRows.filter((row) => habitKeys.has(row.key) && isComplete(row)).length, minimumVersionsUsed: eligibleRows.filter((row) => habitKeys.has(row.key) && row.status === "minimum").length, recoveryCount: enrollment.recovery_count, byHabit: [...habitBreakdown.values()].map((item) => ({ ...item, completionPercentage: item.planned ? Math.round((item.completed + item.minimum * .5) / item.planned * 100) : null })) },
-      training: { planned: workoutPlanned, completed: eligibleRows.filter((row) => workoutKeys.has(row.key) && isComplete(row)).length, totalTrainingMinutes: flatActions.filter((item) => item.sourceType === "workout" && eligibleRows.some((row) => row.key === item.key && isComplete(row))).reduce((sum, item) => sum + Number(item.durationMinutes ?? 0), 0), bodyCompositionEntries: bodyEntries },
-      finance: { actionsPlanned: flatActions.filter((item) => item.sourceType === "finance").length, actionsCompleted: eligibleRows.filter((row) => flatActions.some((item) => item.sourceType === "finance" && item.key === row.key) && isComplete(row)).length, amountMovement: null, goal: financeGoal ? { id:financeGoal.id, title:financeGoal.title, progress:financeGoal.progress, target:financeGoal.target } : null },
+      taskCompletion: { planned: taskPlanned, completed: eligibleRows.filter((row: any) => taskKeys.has(row.key) && isComplete(row)).length, partial: eligibleRows.filter((row: any) => taskKeys.has(row.key) && ["partial","minimum"].includes(row.status)).length, rescheduled: eligibleRows.filter((row: any) => taskKeys.has(row.key) && row.status === "rescheduled").length, blocked: eligibleRows.filter((row: any) => taskKeys.has(row.key) && row.status === "blocked").length, completionPercentage: totalEligible ? Math.round(totalCredits / totalEligible * 100) : null },
+      habitConsistency: { planned: habitPlanned, completed: eligibleRows.filter((row: any) => habitKeys.has(row.key) && isComplete(row)).length, minimumVersionsUsed: eligibleRows.filter((row: any) => habitKeys.has(row.key) && row.status === "minimum").length, recoveryCount: enrollment.recovery_count, byHabit: [...habitBreakdown.values()].map((item) => ({ ...item, completionPercentage: item.planned ? Math.round((item.completed + item.minimum * .5) / item.planned * 100) : null })) },
+      training: { planned: workoutPlanned, completed: eligibleRows.filter((row: any) => workoutKeys.has(row.key) && isComplete(row)).length, totalTrainingMinutes: flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "workout" && eligibleRows.some((row: any) => row.key === item.key && isComplete(row))).reduce((sum: number, item: PlannedResetAction & { date: string }) => sum + Number(item.durationMinutes ?? 0), 0), bodyCompositionEntries: bodyEntries },
+      finance: { actionsPlanned: flatActions.filter((item: PlannedResetAction & { date: string }) => item.sourceType === "finance").length, actionsCompleted: eligibleRows.filter((row: any) => flatActions.some((item: PlannedResetAction & { date: string }) => item.sourceType === "finance" && item.key === row.key) && isComplete(row)).length, amountMovement: null, goal: financeGoal ? { id:financeGoal.id, title:financeGoal.title, progress:financeGoal.progress, target:financeGoal.target } : null },
       patterns: { confirmed: pattern?.status === "confirmed" ? [pattern.summary] : [], earlySignals: pattern && pattern.status !== "rejected" ? [pattern.summary] : [], rejected: pattern?.status === "rejected" ? [pattern.summary] : [], needsMoreEvidence: !pattern },
       dailySummaries: daily,
       coachSummary: buildWeekCoachSummary(closures, pattern),
@@ -676,7 +678,7 @@ async function loadSnapshot(supabase: any, enrollmentId: string, localDate: stri
   const { data, error } = await supabase.from("reset_daily_snapshots").select(SNAPSHOT_SELECT).eq("enrollment_id", enrollmentId).eq("local_date", localDate).maybeSingle();
   if (error) throw new Error(error.message); return data;
 }
-async function loadClosures(supabase: any, enrollmentId: string) { const { data, error } = await supabase.from("reset_daily_closures").select(CLOSURE_SELECT).eq("enrollment_id", enrollmentId).order("local_date"); if (error) throw new Error(error.message); return data ?? []; }
+async function loadClosures(supabase: any, enrollmentId: string): Promise<ClosureRow[]> { const { data, error } = await supabase.from("reset_daily_closures").select(CLOSURE_SELECT).eq("enrollment_id", enrollmentId).order("local_date"); if (error) throw new Error(error.message); return data ?? []; }
 async function markPastSnapshotsMissed(supabase: any, enrollmentId: string, localDate: string) { await supabase.from("reset_daily_snapshots").update({ day_status: "missed" }).eq("enrollment_id", enrollmentId).lt("local_date", localDate).in("day_status", ["available","in_progress"]); }
 
 async function isReturningAfterMiss(enrollment: EnrollmentRow, localDate: string, closures: ClosureRow[], supabase: any) {
@@ -684,7 +686,8 @@ async function isReturningAfterMiss(enrollment: EnrollmentRow, localDate: string
   const yesterday = addLocalDays(localDate, -1);
   const { data: prior } = await supabase.from("reset_daily_snapshots").select("day_status").eq("enrollment_id", enrollment.id).eq("local_date", yesterday).maybeSingle();
   if (prior?.day_status === "missed") return true;
-  const lastClosed = closures.at(-1)?.local_date ? String(closures.at(-1).local_date) : null;
+  const lastClosure = closures.at(-1);
+  const lastClosed = lastClosure?.local_date ? String(lastClosure.local_date) : null;
   return lastClosed ? diffLocalDays(lastClosed, localDate) > 1 : diffLocalDays(enrollment.start_date, localDate) > 0;
 }
 
