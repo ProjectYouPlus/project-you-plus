@@ -38,8 +38,11 @@ jobs:
       - name: Browser regression
         run: npm run test:e2e
       - name: Connected onboarding flow
+        if: ${{ secrets.ONBOARDING_E2E_EMAIL != '' && secrets.ONBOARDING_E2E_PASSWORD != '' }}
         env:
-          LIVE_ONBOARDING_BASE_URL: https://project-you-plus-5xanslbfq-miguelbinet-9644.vercel.app
+          LIVE_ONBOARDING_BASE_URL: https://project-you-plus-git-feature-production-c11e96-miguelbinet-9644.vercel.app
+          LIVE_ONBOARDING_EMAIL: ${{ secrets.ONBOARDING_E2E_EMAIL }}
+          LIVE_ONBOARDING_PASSWORD: ${{ secrets.ONBOARDING_E2E_PASSWORD }}
         run: npx playwright test tests/e2e/onboarding-live.spec.ts --project=chromium
       - name: Upload QA evidence
         if: always()
