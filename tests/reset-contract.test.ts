@@ -7,9 +7,8 @@ const migration = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/
 const service = fs.readFileSync(path.join(process.cwd(), "lib/reset/service.ts"), "utf8");
 
 test("Reset persistence is idempotent per enrollment and local date", () => {
-  assert.match(migration, /unique\s*\(enrollment_id,\s*local_date\)/i);
-  assert.match(migration, /reset_daily_snapshots/i);
-  assert.match(migration, /reset_daily_closures/i);
+  assert.match(migration, /unique\s+(?:index[^\n]+)?[^\n]*reset_daily_snapshots[^\n]*\(enrollment_id,\s*local_date\)/i);
+  assert.match(migration, /unique\s+(?:index[^\n]+)?[^\n]*reset_daily_closures[^\n]*\(enrollment_id,\s*local_date\)/i);
   assert.match(service, /eq\("enrollment_id",\s*enrollment\.id\)\.eq\("local_date",\s*localDate\)/);
 });
 
@@ -21,10 +20,11 @@ test("Reset tables enforce own-row RLS", () => {
 });
 
 test("auto enrollment only follows initial completed activated onboarding", () => {
-  assert.match(migration, /mode\s*<>\s*'initial'/i);
-  assert.match(migration, /status\s*<>\s*'completed'/i);
-  assert.match(migration, /activated_at\s+is\s+null/i);
+  assert.match(migration, /new\.mode\s*=\s*'initial'/i);
+  assert.match(migration, /new\.status\s*=\s*'completed'/i);
+  assert.match(migration, /new\.activated_at\s+is\s+not\s+null/i);
   assert.match(migration, /source_onboarding_session_id/i);
+  assert.ok(!migration.includes("new.mode = 'personalize'"));
 });
 
 test("meaningful Reset events are allowlisted and screen views stay analytics-only", () => {
