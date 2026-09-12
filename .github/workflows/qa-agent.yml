@@ -45,8 +45,19 @@ jobs:
       - name: Browser regression
         shell: bash
         run: set -o pipefail && npm run test:e2e 2>&1 | tee qa-logs/e2e.log
+      - name: Configure disposable connected onboarding identity
+        if: ${{ github.head_ref == 'test/auto-build-authenticated-e2e' || github.ref_name == 'test/auto-build-authenticated-e2e' }}
+        shell: bash
+        run: |
+          suffix="${GITHUB_SHA:0:12}"
+          digest="$(printf 'project-you-plus-connected-e2e:%s' "$GITHUB_SHA" | sha256sum | cut -c1-28)"
+          echo "NEXT_PUBLIC_SUPABASE_URL=https://ehyewrldhttmijizdwhs.supabase.co" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_pQbI-ehHOEZNsF2Ja9IfNw_jVTOUg4q" >> "$GITHUB_ENV"
+          echo "LIVE_ONBOARDING_BASE_URL=http://127.0.0.1:3000" >> "$GITHUB_ENV"
+          echo "LIVE_ONBOARDING_EMAIL=autobuild-e2e-${suffix}@example.invalid" >> "$GITHUB_ENV"
+          echo "LIVE_ONBOARDING_PASSWORD=E2E-${digest}Aa1!" >> "$GITHUB_ENV"
       - name: Connected onboarding flow
-        if: ${{ env.LIVE_ONBOARDING_EMAIL != '' && env.LIVE_ONBOARDING_PASSWORD != '' }}
+        if: ${{ (env.LIVE_ONBOARDING_EMAIL != '' && env.LIVE_ONBOARDING_PASSWORD != '') || github.head_ref == 'test/auto-build-authenticated-e2e' || github.ref_name == 'test/auto-build-authenticated-e2e' }}
         shell: bash
         run: set -o pipefail && npx playwright test tests/e2e/onboarding-live.spec.ts --project=desktop-chromium 2>&1 | tee qa-logs/live-onboarding.log
       - name: Upload QA evidence
