@@ -1,5 +1,6 @@
 import { DepartmentBudgetControl } from "@/components/marketing/department-budget-control";
 import { GrowthDepartmentDashboard } from "@/components/marketing/growth-department-dashboard";
+import { MarketingRuntimeStatus } from "@/components/marketing/runtime-status";
 import { OwnerSectionShell } from "@/components/owner/owner-section-shell";
 import { requireAdmin } from "@/lib/owner/access";
 import { getOwnerApprovalCount } from "@/lib/owner/approval-count";
@@ -20,6 +21,7 @@ export default async function OwnerMarketingPage() {
       approvalCount={approvalCount}
     >
       <div className="-mt-3 mb-4 text-[10px] font-semibold uppercase tracking-[.22em] text-[#b7a2ff]">Marketing Operations</div>
+      <MarketingRuntimeStatus />
       <DepartmentBudgetControl />
       <GrowthDepartmentDashboard />
     </OwnerSectionShell>
