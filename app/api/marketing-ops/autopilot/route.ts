@@ -23,9 +23,9 @@ export async function POST(request: Request) {
 Objective: ${body.objective || "Build anticipation for Project You+ before launch."}
 Context: ${body.context || "Premium AI life operating system. Founder-led, aspirational, intelligent and slightly mysterious. Prioritize curiosity, conversation, shares, saves, qualified profile visits, follows and waitlist intent."}
 
-Project You+ unifies Today, Plan, Health, Fitness, Goals, Finances, Progress, Habits and Accountability through one intelligent Coach. It is not a task manager, habit tracker or generic chatbot. Avoid productivity listicles, generic motivation, AI news and hustle clichés. Favor contrarian hooks, strong POVs, identity, product reveals, founder-build storytelling, cultural tension, instantly recognized pain and high-retention visual concepts.
+Project You+ unifies Today, Plan, Health, Fitness, Goals, Finances, Progress, Habits and Accountability through one intelligent Coach. It is not a task manager, habit tracker or generic chatbot. Avoid productivity listicles, generic motivation, AI news, fake UGC, AI talking-head ads and hustle clichés. Favor contrarian hooks, strong POVs, identity, product reveals, founder-build storytelling, cultural tension, instantly recognized pain and high-retention visual concepts.
 
-Create 7 distinct content items with at least 3 priority Reels, 6 practical tasks, 3 brand-fit opportunities, 3 community actions, 3 partnership archetypes and 2 disciplined experiments. Keep every script under 80 words, every caption under 60 words and all other text fields to one concise sentence. Founder tasks and filming instructions must be specific and fast. Scores describe strategic recommendations, never live measurements. Do not invent live trend statistics, creator handles, audiences, performance or Instagram data.`;
+Create 5 distinct content items. The majority must be premium static/editorial posts, carousels or stories. Include no more than 1 Reel, and only if it is strong enough to be the week's priority Reel; otherwise use zero Reels. Reels should be product-led motion typography with real Project You+ UI added during editing, not fake user-generated content. Create 5 practical tasks, 3 brand-fit opportunities, 3 community actions, 3 partnership archetypes and 2 disciplined experiments. Keep every script under 80 words, every caption under 60 words and all other text fields to one concise sentence. Founder tasks and filming instructions must be specific and fast. Scores describe strategic recommendations, never live measurements. Do not invent live trend statistics, creator handles, audiences, performance or Instagram data.`;
 
   let runId: string | null = null;
   try {
@@ -98,7 +98,7 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
     await recordEstimatedSpend(supabase, user.id, "growth", 8, "orchestrator", runType);
 
     const { value: plan, raw: output } = await callOpenAIStructuredText<AutopilotPlan>({
-      instructions: MARKETING_AGENT_MAP.orchestrator.systemPrompt + " Coordinate the strategy, Reels, creative, copy, trends, analytics, community and partnerships disciplines into one coherent operating plan.",
+      instructions: MARKETING_AGENT_MAP.orchestrator.systemPrompt + " Coordinate the strategy, production, creative, copy, trends, analytics, community and partnerships disciplines into one coherent operating plan.",
       messages: [{ role: "user", content: prompt }],
       schemaName: "marketing_autopilot_plan",
       schema: AUTOPILOT_PLAN_SCHEMA,
@@ -124,6 +124,7 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
       format: item.format,
       pillar: item.pillar,
       stage: "production",
+      sub_status: "creative_review",
       approval_status: "pending",
       hook: item.hook,
       script: item.script,
@@ -133,6 +134,8 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
       cta: item.cta,
       filming_instructions: item.filming_instructions,
       source_agent_id: "orchestrator",
+      assigned_agent_id: "creative",
+      next_action: "Run Muse to review the creative package",
       score: Math.max(1, Math.min(100, 105 - item.priority * 5)),
       metrics: { founder_task: item.founder_task, priority: item.priority, autopilot_date: today },
     }));
