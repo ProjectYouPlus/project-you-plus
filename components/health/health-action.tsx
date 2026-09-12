@@ -1,16 +1,20 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { emitFeedback } from "@/lib/celebrations/client";
+import type { FeedbackKind } from "@/lib/celebrations/types";
 export function HealthAction({
   action,
   children,
   className = "py-button-secondary",
   disabled = false,
+  feedback,
 }: {
   action: () => Promise<{ error: string | null } | void>;
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  feedback?: FeedbackKind;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -27,7 +31,7 @@ export function HealthAction({
           try {
             const result = await action();
             if (result?.error) setError(result.error);
-            else router.refresh();
+            else { if (feedback) emitFeedback(feedback); router.refresh(); }
           } catch {
             setError("Could not save. Please try again.");
           } finally {

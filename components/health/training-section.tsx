@@ -92,6 +92,7 @@ export function TrainingSection({
                   <div className="mt-3 grid gap-2">
                     <HealthAction
                       className="py-liquid-button w-full"
+                      feedback="workout"
                       action={() =>
                         updateWorkoutStatus(plan.id, workout.key, "completed")
                       }

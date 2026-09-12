@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { logHabitToday } from "@/lib/actions/habits";
 import { recordHabitMinimumVersion } from "@/lib/actions/system-habits";
 import type { Habit } from "@/lib/types";
+import { emitFeedback } from "@/lib/celebrations/client";
 
 export function SystemHabitCard({habit,goalTitle}:{habit:Habit;goalTitle?:string}){
   const router=useRouter();
@@ -16,7 +17,7 @@ export function SystemHabitCard({habit,goalTitle}:{habit:Habit;goalTitle?:string
     {minimum&&habit.minimumVersion&&<div className="mt-3 rounded-xl border border-accent/20 bg-accent/[.055] p-3 text-[10.5px] leading-relaxed text-text-2"><span className="font-semibold text-accent-text">Minimum version:</span> {habit.minimumVersion}</div>}
     {error&&<div role="alert" className="mt-2 text-[10px] text-red-200">{error}</div>}
     <div className="mt-3 flex gap-2">
-      <button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);await logHabitToday(habit.id);router.refresh();})} className="min-h-10 flex-1 rounded-xl bg-accent text-[10.5px] font-semibold text-white disabled:opacity-50">{pending?"Saving…":"Complete"}</button>
+      <button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);await logHabitToday(habit.id);emitFeedback("habit");router.refresh();})} className="min-h-10 flex-1 rounded-xl bg-accent text-[10.5px] font-semibold text-white disabled:opacity-50">{pending?"Saving…":"Complete"}</button>
       {habit.minimumVersion&&<button type="button" disabled={pending} onClick={()=>startTransition(async()=>{setError(null);const result=await recordHabitMinimumVersion(habit.id);if(!result.ok){setError(result.error);return;}setMinimum(true);})} className="min-h-10 rounded-xl border border-white/[.08] px-3 text-[10.5px] font-semibold text-text-2 disabled:opacity-50">Minimum version</button>}
     </div>
   </div>;
