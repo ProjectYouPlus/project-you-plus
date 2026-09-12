@@ -43,15 +43,25 @@ export function validateSystemProposal(value:unknown,answers?:OnboardingAnswers)
   if(proposal.goals.length<1||proposal.goals.length>3)issues.push("goal_count");
   const activeGoals=proposal.goals.filter(goal=>!goal.deferred);if(!activeGoals.length)issues.push("no_active_goal");
   const goalIds=new Set(proposal.goals.map(goal=>goal.clientId));if(goalIds.size!==proposal.goals.length)issues.push("duplicate_goal_client_id");
-  for(const goal of activeGoals){if(!goal.title.trim()||!goal.desiredOutcome.trim())issues.push(`goal:${goal.clientId}:required`);const linked=proposal.actions.filter(action=>action.linkedGoalClientId===goal.clientId&&!action.deferred);if(!linked.length)issues.push(`goal:${goal.clientId}:no_action`);if(!goal.successMetrics.length)issues.push(`goal:${goal.clientId}:no_metric`);if(goal.milestones.length>4)issues.push(`goal:${goal.clientId}:milestones`);}
+  for(const goal of activeGoals){
+    if(!goal.title.trim()||!goal.desiredOutcome.trim())issues.push(`goal:${goal.clientId}:required`);
+    const linked=proposal.actions.filter(action=>action.linkedGoalClientId===goal.clientId&&!action.deferred);if(!linked.length)issues.push(`goal:${goal.clientId}:no_action`);
+    if(!goal.successMetrics.length)issues.push(`goal:${goal.clientId}:no_metric`);
+    if(goal.milestones.length>4)issues.push(`goal:${goal.clientId}:milestones`);
+    for(const milestone of goal.milestones){
+      if(!milestone.id||!milestone.title.trim()||!Number.isInteger(milestone.order)||milestone.order<1||milestone.order>20)issues.push(`goal:${goal.clientId}:milestone_shape`);
+      if(milestone.targetValue!=null&&!Number.isFinite(milestone.targetValue))issues.push(`goal:${goal.clientId}:milestone_target`);
+      if(milestone.targetDate&&!/^\d{4}-\d{2}-\d{2}$/.test(milestone.targetDate))issues.push(`goal:${goal.clientId}:milestone_date`);
+    }
+  }
   const actionIds=new Set(proposal.actions.map(action=>action.clientId));if(actionIds.size!==proposal.actions.length)issues.push("duplicate_action_client_id");
   const dailyHabits=proposal.actions.filter(action=>!action.deferred&&action.kind==="habit"&&(action.frequency==="daily"||action.frequency==="weekdays"));if(dailyHabits.length>3)issues.push("daily_habit_limit");
-  for(const action of proposal.actions){if(!goalIds.has(action.linkedGoalClientId))issues.push(`action:${action.clientId}:goal`);if(action.durationMinutes<0||action.durationMinutes>240)issues.push(`action:${action.clientId}:duration`);if(action.preferredDays.some(day=>!Number.isInteger(day)||day<0||day>6))issues.push(`action:${action.clientId}:days`);}
+  for(const action of proposal.actions){if(!goalIds.has(action.linkedGoalClientId))issues.push(`action:${action.clientId}:goal`);if(!Number.isFinite(action.durationMinutes)||action.durationMinutes<0||action.durationMinutes>240)issues.push(`action:${action.clientId}:duration`);if(action.targetPerWeek!=null&&(!Number.isInteger(action.targetPerWeek)||action.targetPerWeek<1||action.targetPerWeek>7))issues.push(`action:${action.clientId}:frequency`);if(action.preferredDays.some(day=>!Number.isInteger(day)||day<0||day>6))issues.push(`action:${action.clientId}:days`);}
   for(const block of proposal.schedule){if(!actionIds.has(block.actionClientId))issues.push(`schedule:${block.clientId}:action`);if(block.conflictStatus==="conflict")warnings.push(`schedule_conflict:${block.clientId}`);if(block.startTime&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(block.startTime))issues.push(`schedule:${block.clientId}:start`);if(block.endTime&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(block.endTime))issues.push(`schedule:${block.clientId}:end`);}
-  if(proposal.metrics.some(metric=>!goalIds.has(metric.linkedGoalClientId)))issues.push("metric_goal_link");
+  for(const metric of proposal.metrics){if(!goalIds.has(metric.linkedGoalClientId))issues.push("metric_goal_link");if(!metric.id||!metric.name.trim()||!metric.unit.trim())issues.push(`metric:${metric.id||"unknown"}:required`);if(metric.baseline!=null&&!Number.isFinite(metric.baseline))issues.push(`metric:${metric.id}:baseline`);if(metric.targetValue!=null&&!Number.isFinite(metric.targetValue))issues.push(`metric:${metric.id}:target`);}
   if(proposal.weeklyReview.day<0||proposal.weeklyReview.day>6||!/^([01]\d|2[0-3]):[0-5]\d$/.test(proposal.weeklyReview.time))issues.push("weekly_review");
   if(!actionIds.has(proposal.today.firstMeaningfulActionClientId))issues.push("today_first_action");if(proposal.today.priorityActionClientIds.length>3)issues.push("today_priority_limit");if(proposal.today.priorityActionClientIds.some(id=>!actionIds.has(id)))issues.push("today_priority_reference");
-  if(proposal.workload.activeGoalCount!==activeGoals.length)issues.push("workload_goal_count");if(proposal.workload.dailyHabitCount>3)issues.push("workload_habit_count");if(proposal.workload.weeklyMinutes<0||proposal.workload.weeklyMinutes>7*24*60)issues.push("workload_minutes");
+  if(proposal.workload.activeGoalCount!==activeGoals.length)issues.push("workload_goal_count");if(proposal.workload.dailyHabitCount>3)issues.push("workload_habit_count");if(!Number.isFinite(proposal.workload.weeklyMinutes)||proposal.workload.weeklyMinutes<0||proposal.workload.weeklyMinutes>7*24*60)issues.push("workload_minutes");
   if(answers){
     if(activeGoals.length>Math.min(3,answers.goals.length))issues.push("goal_source_count");
     // A lighter plan may use fewer sessions than the stated maximum; it may never exceed it.
