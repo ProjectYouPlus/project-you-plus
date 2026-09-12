@@ -1,23 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 const liveBase = process.env.LIVE_ONBOARDING_BASE_URL;
-const runId = process.env.GITHUB_RUN_ID;
-
-function credentials() {
-  if (!runId) throw new Error("GITHUB_RUN_ID is required for live onboarding E2E");
-  return {
-    email: `onboarding-e2e-${runId}@example.com`,
-    password: `PyE2E!${runId}xQ7`,
-  };
-}
+const email = process.env.LIVE_ONBOARDING_EMAIL;
+const password = process.env.LIVE_ONBOARDING_PASSWORD;
 
 test("live new user completes onboarding and lands on useful product surfaces", async ({ page }) => {
-  test.skip(!liveBase || !runId, "Live onboarding environment is not configured");
-  const { email, password } = credentials();
+  test.skip(!liveBase || !email || !password, "Connected onboarding credentials are not configured");
 
   await page.goto(`${liveBase}/login`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Email").fill(email!);
+  await page.getByLabel("Password").fill(password!);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL(/\/onboarding(?:\?|$)/, { timeout: 20_000 });
 
