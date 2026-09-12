@@ -8,7 +8,7 @@ async function continueOnboarding(page:Page){
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 }
 
-test("authenticated three-goal onboarding builds, reviews, activates, and populates Project You+", async ({ page }) => {
+test("authenticated three-goal onboarding builds, reviews, activates, starts Reset, and populates Project You+", async ({ page }) => {
   test.skip(!liveBase || !email || !password, "Connected onboarding credentials are not configured");
 
   await page.goto(`${liveBase}/login`);
@@ -119,14 +119,26 @@ test("authenticated three-goal onboarding builds, reviews, activates, and popula
   await expect(page.getByText("Goal momentum", { exact: true })).toBeVisible();
   await expect(page.getByText("Next Weekly Review", { exact: true })).toBeVisible();
 
+  // The activated personal system immediately hands off to the Reset. Depending on local time,
+  // the user gets a real Day 1 or a preparation evening rather than an impossible late-night plan.
+  const resetCard = page.locator('section[aria-label*="Project You+ Reset"]').first();
+  await expect(resetCard).toBeVisible({ timeout: 20_000 });
+  await expect(resetCard).toContainText(/Day 1 of 7|Tomorrow starts with a realistic Day 1\./);
+  await resetCard.getByRole("link").last().click();
+  await page.waitForURL(/\/reset(?:\?|$)/, { timeout: 20_000 });
+  await expect(page.getByText("7-Day Project You+ Reset", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Your direction is clear\.|Your 7-Day Project You\+ Reset starts tomorrow\./).first()).toBeVisible();
+
   await page.goto(`${liveBase}/plan`);
   await expect(page.getByText(/15 pounds|body composition/i).first()).toBeVisible();
   await expect(page.getByText(/10,000/i).first()).toBeVisible();
 
   await page.goto(`${liveBase}/coach`);
   await expect(page.getByText(/3 active goals/i)).toBeVisible();
+  await expect(page.locator('section[aria-label*="Project You+ Reset"]').first()).toBeVisible();
 
   await page.goto(`${liveBase}/you`);
   await expect(page.getByText(/3 active/i).first()).toBeVisible();
   await expect(page.getByText("Personalize Project You+", { exact: true })).toBeVisible();
+  await expect(page.locator('section[aria-label*="Project You+ Reset"]').first()).toBeVisible();
 });
