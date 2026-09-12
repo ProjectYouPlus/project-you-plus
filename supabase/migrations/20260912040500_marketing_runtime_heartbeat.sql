@@ -12,16 +12,16 @@ create table if not exists private.marketing_runtime_auth (
 );
 
 insert into private.marketing_runtime_auth(id, token)
-values ('default', encode(gen_random_bytes(32), 'hex'))
+values ('default', encode(extensions.gen_random_bytes(32), 'hex'))
 on conflict (id) do nothing;
 
 create or replace function public.get_marketing_runtime_token_hash()
 returns text
 language sql
 security definer
-set search_path = private, public, pg_temp
+set search_path = private, public, extensions, pg_temp
 as $$
-  select encode(digest(token, 'sha256'), 'hex')
+  select encode(extensions.digest(token, 'sha256'), 'hex')
   from private.marketing_runtime_auth
   where id = 'default';
 $$;
