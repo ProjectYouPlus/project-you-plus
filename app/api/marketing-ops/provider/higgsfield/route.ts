@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 }
 
 async function submitJob(admin: ReturnType<typeof createAdminClient>, secret: Awaited<ReturnType<typeof getHiggsfieldSecret>>, job: Job) {
-  const { modelPath, body } = buildHiggsfieldGenerationRequest(job);
+  const { modelPath, body } = buildHiggsfieldGenerationRequest(job, secret);
   const estimate = await estimateHiggsfieldRequest(secret, modelPath, body);
   if (!(estimate.credits > 0)) throw new Error("Higgsfield returned an invalid zero-credit estimate; generation was not submitted.");
 
@@ -90,7 +90,7 @@ async function submitJob(admin: ReturnType<typeof createAdminClient>, secret: Aw
     provider_status: submitted.status,
     submitted_at: new Date().toISOString(),
   };
-  const nextStatus = submitted.status === "processing" ? "processing" : "submitted";
+  const nextStatus = submitted.status === "in_progress" ? "processing" : "submitted";
   const { error: updateError } = await admin.from("marketing_generation_jobs").update({
     status: nextStatus,
     provider_job_id: submitted.requestId,
