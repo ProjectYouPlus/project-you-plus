@@ -465,10 +465,10 @@ async function plannedActionsForToday(supabase: any, context: UserContext, local
     return [{ key: `habit:${habit.id}`, sourceType: "habit" as const, sourceId: habit.id, title: habit.title, domain: habit.domain ?? null, due: true, completed: loggedHabits.has(habit.id), isPrimary: Boolean(primaryDomain && String(habit.domain ?? "").toLowerCase() === primaryDomain), optional: false, durationMinutes: habit.durationMinutes ?? null, minimumVersion: habit.minimumVersion ?? null, preferredTime: habit.preferredTime ?? null }];
   });
   const workoutActions: PlannedResetAction[] = [];
-  const plan = context.training.activePlan, workoutSession = plan?.schedule.find((item) => Number(item.dayIndex) === weekday);
-  if (plan && workoutSession) {
-    const { data: workoutLog } = await supabase.from("workout_plan_logs").select("id,status").eq("plan_id", plan.id).eq("session_key", workoutSession.key).eq("completed_on", localDate).eq("status", "completed").limit(1).maybeSingle();
-    workoutActions.push({ key: `workout:${plan.id}:${workoutSession.key}`, sourceType: "workout", sourceId: `${plan.id}:${workoutSession.key}`, title: workoutSession.title || "Scheduled workout", domain: "health", due: true, completed: Boolean(workoutLog), isPrimary: primaryDomain === "health", optional: false, durationMinutes: Number(workoutSession.duration ?? plan.sessionMinutes ?? 0) || null, minimumVersion: Number(workoutSession.duration ?? plan.sessionMinutes ?? 0) > 20 ? "Complete a 15-minute minimum workout" : null, preferredTime: null });
+  const plan = context.training.activePlan, session = plan?.schedule.find((item) => Number(item.dayIndex) === weekday);
+  if (plan && session) {
+    const { data: workoutLog } = await supabase.from("workout_plan_logs").select("id,status").eq("plan_id", plan.id).eq("session_key", session.key).eq("completed_on", localDate).eq("status", "completed").limit(1).maybeSingle();
+    workoutActions.push({ key: `workout:${plan.id}:${session.key}`, sourceType: "workout", sourceId: `${plan.id}:${session.key}`, title: session.title || "Scheduled workout", domain: "health", due: true, completed: Boolean(workoutLog), isPrimary: primaryDomain === "health", optional: false, durationMinutes: Number(session.duration ?? plan.sessionMinutes ?? 0) || null, minimumVersion: Number(session.duration ?? plan.sessionMinutes ?? 0) > 20 ? "Complete a 15-minute minimum workout" : null, preferredTime: null });
   }
   return [...taskActions, ...habitActions, ...workoutActions];
 }
