@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const migration = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/20260912143000_seven_day_project_you_reset_v1.sql"), "utf8");
+const hardening = fs.readFileSync(path.join(process.cwd(), "supabase/migrations/20260912144500_reset_private_event_boundary.sql"), "utf8");
 const service = fs.readFileSync(path.join(process.cwd(), "lib/reset/service.ts"), "utf8");
 
 test("Reset persistence is idempotent per enrollment and local date", () => {
@@ -32,6 +33,15 @@ test("meaningful Reset events are allowlisted and screen views stay analytics-on
     assert.ok(migration.includes(event), event);
   }
   assert.ok(!migration.includes("reset.screen_opened"));
+});
+
+test("Reset meaningful-event privilege is private and the exposed RPC is invoker-safe", () => {
+  assert.match(hardening, /function\s+private\.append_reset_behavior_event/i);
+  assert.match(hardening, /private\.append_reset_behavior_event[\s\S]*security\s+definer/i);
+  assert.match(hardening, /function\s+public\.append_reset_behavior_event/i);
+  assert.match(hardening, /public\.append_reset_behavior_event[\s\S]*security\s+invoker/i);
+  assert.match(hardening, /public\.append_behavior_event\(/i);
+  assert.match(hardening, /where\s+id\s*=\s*p_enrollment_id[\s\S]*user_id\s*=\s*v_user_id/i);
 });
 
 test("Reset AI operations use the existing orchestrator/Coach boundary", () => {
