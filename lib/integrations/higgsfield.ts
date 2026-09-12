@@ -3,6 +3,8 @@ import { getIntegrationSecret, saveIntegrationSecret, deleteIntegrationSecret } 
 export type HiggsfieldSecret = {
   api_key_id: string;
   api_key_secret: string;
+  image_model_path?: string | null;
+  video_model_path?: string | null;
 };
 
 type HiggsfieldResponse = {
@@ -11,11 +13,12 @@ type HiggsfieldResponse = {
   status_url?: string;
   cancel_url?: string;
   images?: Array<{ url?: string }>;
+  video?: { url?: string };
   videos?: Array<{ url?: string }>;
   outputs?: Array<{ url?: string }>;
   output?: { url?: string } | Array<{ url?: string }>;
   error?: { message?: string } | string;
-  detail?: string;
+  detail?: unknown;
   credits?: string | number;
   usd?: string | number;
   [key: string]: unknown;
@@ -23,14 +26,15 @@ type HiggsfieldResponse = {
 
 const BASE_URL = "https://api.higgsfield.ai";
 const DEFAULT_IMAGE_MODEL_PATH = "/higgsfield-ai/soul/v2/standard";
-const DEFAULT_VIDEO_MODEL_PATH = "/bytedance/seedance/v1/pro/fast/text-to-video";
 
-export function higgsfieldImageModelPath() {
-  return normalizeModelPath(process.env.HIGGSFIELD_IMAGE_MODEL_PATH || DEFAULT_IMAGE_MODEL_PATH);
+export function higgsfieldImageModelPath(secret?: Pick<HiggsfieldSecret, "image_model_path"> | null) {
+  return normalizeModelPath(secret?.image_model_path || process.env.HIGGSFIELD_IMAGE_MODEL_PATH || DEFAULT_IMAGE_MODEL_PATH);
 }
 
-export function higgsfieldVideoModelPath() {
-  return normalizeModelPath(process.env.HIGGSFIELD_VIDEO_MODEL_PATH || DEFAULT_VIDEO_MODEL_PATH);
+export function higgsfieldVideoModelPath(secret?: Pick<HiggsfieldSecret, "video_model_path"> | null) {
+  const value = secret?.video_model_path || process.env.HIGGSFIELD_VIDEO_MODEL_PATH || "";
+  if (!value) throw new Error("Higgsfield video model endpoint is not configured. Copy a text-to-video endpoint available to this account from Higgsfield Cloud.");
+  return normalizeModelPath(value);
 }
 
 export async function getHiggsfieldSecret(userId: string) {
@@ -52,12 +56,12 @@ export function buildHiggsfieldGenerationRequest(job: {
   prompt?: string | null;
   model?: string | null;
   metadata?: Record<string, unknown> | null;
-}) {
+}, secret?: HiggsfieldSecret | null) {
   const isImage = job.generation_type === "image";
   const metadata = job.metadata || {};
   const configuredPath = typeof metadata.model_path === "string" ? metadata.model_path : null;
   const modelPath = normalizeModelPath(
-    configuredPath || (job.model?.startsWith("/") ? job.model : null) || (isImage ? higgsfieldImageModelPath() : higgsfieldVideoModelPath())
+    configuredPath || (job.model?.startsWith("/") ? job.model : null) || (isImage ? higgsfieldImageModelPath(secret) : higgsfieldVideoModelPath(secret))
   );
   const prompt = String(job.prompt || "").trim();
   if (!prompt) throw new Error("Higgsfield generation job is missing a prompt");
@@ -78,7 +82,7 @@ export function buildHiggsfieldGenerationRequest(job: {
     body: {
       prompt,
       aspect_ratio: String(metadata.aspect_ratio || "9:16"),
-      duration: Math.max(2, Math.min(12, Math.round(requestedDuration))),
+      duration: Math.max(2, Math.min(30, Math.round(requestedDuration))),
     },
   };
 }
@@ -114,14 +118,14 @@ export async function getHiggsfieldRequestStatus(secret: HiggsfieldSecret, reque
   const path = statusUrl && statusUrl.startsWith(BASE_URL) ? statusUrl.slice(BASE_URL.length) : `/requests/${encodeURIComponent(requestId)}/status`;
   const data = await higgsfieldFetch(secret, path, { method: "GET" });
   return {
-    status: String(data.status || "processing"),
+    status: String(data.status || "in_progress"),
     assetUrl: extractHiggsfieldAssetUrl(data),
     raw: data,
   };
 }
 
 export async function testHiggsfieldCredentials(secret: HiggsfieldSecret) {
-  const modelPath = higgsfieldImageModelPath();
+  const modelPath = higgsfieldImageModelPath(secret);
   const result = await estimateHiggsfieldRequest(secret, modelPath, {
     prompt: "Project You+ integration health check, premium abstract editorial technology background",
     aspect_ratio: "4:5",
@@ -145,7 +149,8 @@ async function higgsfieldFetch(secret: HiggsfieldSecret, path: string, init: Req
   try { data = text ? JSON.parse(text) as HiggsfieldResponse : {}; }
   catch { data = { detail: text }; }
   if (!response.ok) {
-    const message = typeof data.error === "string" ? data.error : data.error?.message || data.detail || `Higgsfield API ${response.status}`;
+    const detail = typeof data.detail === "string" ? data.detail : data.detail ? JSON.stringify(data.detail) : "";
+    const message = typeof data.error === "string" ? data.error : data.error?.message || detail || `Higgsfield API ${response.status}`;
     throw new Error(message);
   }
   return data;
@@ -154,6 +159,7 @@ async function higgsfieldFetch(secret: HiggsfieldSecret, path: string, init: Req
 function extractHiggsfieldAssetUrl(data: HiggsfieldResponse) {
   const candidates = [
     data.images?.[0]?.url,
+    data.video?.url,
     data.videos?.[0]?.url,
     data.outputs?.[0]?.url,
     Array.isArray(data.output) ? data.output[0]?.url : data.output?.url,
