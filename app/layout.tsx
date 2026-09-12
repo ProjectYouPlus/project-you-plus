@@ -7,6 +7,7 @@ import "./themes.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   title: "Project You+ — Build the 1% version of yourself",
   description: "An AI-powered personal operating system connecting your goals, tasks, calendar, finances, fitness, health, and habits into one intelligent system.",
 };

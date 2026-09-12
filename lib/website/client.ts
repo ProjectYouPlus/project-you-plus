@@ -12,6 +12,7 @@ export function visit(): Visit {
   return memory;
 }
 export function track(event: string) {
+  if (["localhost", "127.0.0.1"].includes(location.hostname)) return;
   const data = visit();
   // These events fire once per visit, including across a reload.
   const eventId = `${data.session_id}:${event}`;

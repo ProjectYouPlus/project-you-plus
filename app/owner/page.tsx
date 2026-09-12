@@ -4,6 +4,10 @@ import { updateModuleControl } from "@/lib/actions/owner";
 import { getOwnerApprovalCount } from "@/lib/owner/approval-count";
 import { OwnerSectionShell } from "@/components/owner/owner-section-shell";
 
+import { WebsiteOverviewPanel } from "@/components/owner/website-overview";
+import { getWebsiteOverview } from "@/lib/website/overview";
+import { canViewWebsite } from "@/lib/website/overview-types";
+
 export const dynamic = "force-dynamic";
 const DAY = 86_400_000;
 
@@ -15,16 +19,17 @@ type GrowthPoint = { key:number; label:string; total:number; newUsers:number; si
 type GeoPoint = { key:string; label:string; latitude:number; longitude:number; count:number };
 
 export default async function OwnerPage(){
-  const { supabase, user } = await requireAdmin();
+  const { supabase, user, role } = await requireAdmin();
   const now = Date.now();
 
-  const [usersRes,metaRes,loginsRes,modulesRes,totalSigninsRes,approvalCount] = await Promise.all([
+  const [usersRes,metaRes,loginsRes,modulesRes,totalSigninsRes,approvalCount,website] = await Promise.all([
     supabase.from("user_directory").select("user_id,email,full_name,created_at,last_sign_in_at,onboarding_completed").order("created_at",{ascending:false}),
     supabase.from("user_admin_metadata").select("user_id,last_seen_at,last_path"),
     supabase.from("login_events").select("id,user_id,occurred_at,city,region,country,latitude,longitude,device_family,browser,os").order("occurred_at",{ascending:false}).limit(2000),
     supabase.from("app_modules").select("module_key,label,enabled,rollout_percent,locked").order("label"),
     supabase.from("login_events").select("id",{count:"exact",head:true}),
     getOwnerApprovalCount(supabase),
+    canViewWebsite(role) ? getWebsiteOverview(30) : Promise.resolve(null),
   ]);
 
   const users=(usersRes.data??[]) as User[];
@@ -58,6 +63,8 @@ export default async function OwnerPage(){
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"><Metric icon="♙" label="Total Users" value={total} detail={`${new30} new this month`}/><Metric icon="ϟ" label="Active Users (7d)" value={active7} detail={`${pct(active7,total)}% activation rate`}/><Metric icon="♙" label="New Sign Ups (30d)" value={new30} detail={new30?`Avg. ${(new30/30).toFixed(1)}/day`:"No signups yet"}/><Metric icon="↪" label="Total Sign-ins" value={totalSignins} detail="Tracked authentication events"/><Metric icon="◎" label="Countries" value={countries} detail={locations[0]?.label?`Top: ${locations[0].label}`:"No location data yet"}/><Metric icon="▥" label="Avg. Daily Usage" value="—" detail="Session duration not tracked yet"/></section>
 
+        {canViewWebsite(role) && <WebsiteOverviewPanel initialData={website} />}
+
         <section className="mt-3 grid gap-3 xl:grid-cols-[1.45fr_1.4fr_.95fr]">
           <Panel title="User Growth"><UserGrowthChart rows={growth}/></Panel>
           <Panel title="Sign-ins by Location"><div className="mt-3 grid gap-4 md:grid-cols-[1fr_180px]"><SignInMap points={mapPoints} totalSignIns={logins.length}/><Rank rows={locations}/></div></Panel>
@@ -74,7 +81,7 @@ export default async function OwnerPage(){
 }
 
 function Metric({icon,label,value,detail}:{icon:string;label:string;value:string|number;detail:string}){return <div className="rounded-xl border border-[#1d315e] bg-[linear-gradient(145deg,#0d1831,#0b1221)] p-4"><div className="flex items-center gap-2 text-[10px]"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#282268] text-[#9e84ff]">{icon}</span>{label}</div><div className="mt-2 text-[27px] font-bold tracking-[-.04em]">{value}</div><div className="mt-1 text-[10px] text-[#9aa6bc]">{detail}</div></div>}
-function Panel({title,children}:{title:string;children:React.ReactNode}){return <div className="rounded-xl border border-[#1b293f] bg-[linear-gradient(180deg,#0b121f,#09101a)] p-3.5"><div className="text-[12px] font-semibold">{title}</div>{children}</div>}
+function Panel({title,children}:{title:string;children:React.ReactNode}){return <div className="min-w-0 rounded-xl border border-[#1b293f] bg-[linear-gradient(180deg,#0b121f,#09101a)] p-3.5"><div className="text-[12px] font-semibold">{title}</div>{children}</div>}
 function Rank({rows}:{rows:{label:string;count:number}[]}){const max=Math.max(1,...rows.map(r=>r.count));return <div className="space-y-2 text-[9px]">{rows.length?rows.map(r=><div key={r.label}><div className="flex justify-between"><span className="truncate pr-2">{r.label}</span><span>{r.count}</span></div><div className="mt-1 h-1 rounded bg-[#202b40]"><div className="h-full rounded bg-[#7c4dff]" style={{width:`${Math.max(6,r.count/max*100)}%`}}/></div></div>):<div className="pt-8 text-center text-[#718098]">No real data yet</div>}</div>}
 function Action({href,label}:{href:string;label:string}){return <Link href={href} className="rounded-lg border border-[#354560] bg-[#111a29] px-3 py-3 text-center text-[9px] font-medium hover:border-[#664bd2]">{label}</Link>}
 function locationLabel(l:Pick<Login,"city"|"region"|"country">){return [l.city,l.region].filter(Boolean).join(", ")||l.country||"Unknown"}
