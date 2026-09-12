@@ -34,3 +34,5 @@ export type WeeklyReviewProposal = {day:number;time:string;reminderIntent:boolea
 export type OnboardingProposal = {generationVersion:string;generatedAt:string;goals:ProposalGoal[];habits:ProposalHabit[];priorities:ProposalPriority[];healthPlan:HealthPlanProposal|null;financialFocus:FinancialFocusProposal|null;weeklyReview:WeeklyReviewProposal;status:"draft"};
 
 export {EMPTY_ANSWERS,sanitizeAnswers,validateStage,buildFallbackGoalDrafts,validateProposal,buildFallbackProposal,label,dayName} from "./schema-runtime";
+
+// Keep the public onboarding contract small; runtime sanitization and validation live in schema-runtime.ts.
