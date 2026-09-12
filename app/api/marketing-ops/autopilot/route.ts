@@ -6,8 +6,9 @@ import { AUTOPILOT_PLAN_SCHEMA, type AutopilotPlan } from "@/lib/marketing/autop
 import { checkMarketingRunLimit, MARKETING_DEPARTMENT_DAILY_LIMIT, utcDayStart } from "@/lib/marketing/run-limits";
 import { requireMarketingOwner } from "@/lib/marketing/server";
 
-const AUTOPILOT_DAILY_LIMIT = 3;
-const AUTOPILOT_COOLDOWN_MS = 60_000;
+const AUTOPILOT_DAILY_LIMIT = 8;
+const AUTOPILOT_COOLDOWN_MS = 15_000;
+const MARKETING_MAX_CONCURRENT = 3;
 
 export async function POST(request: Request) {
   const { allowed, user, supabase } = await requireMarketingOwner();
@@ -54,11 +55,13 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
       .eq("owner_id", user.id)
       .gte("created_at", utcDayStart())
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(200);
     if (runsError) throw runsError;
     const departmentDecision = checkMarketingRunLimit(todayRuns || [], {
       dailyLimit: MARKETING_DEPARTMENT_DAILY_LIMIT,
-      cooldownMs: 10_000,
+      cooldownMs: 0,
+      maxConcurrent: MARKETING_MAX_CONCURRENT,
+      activeWindowMs: 5 * 60_000,
     });
     if (!departmentDecision.allowed) {
       return NextResponse.json(
@@ -70,6 +73,8 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
     const decision = checkMarketingRunLimit(matchingRuns, {
       dailyLimit: AUTOPILOT_DAILY_LIMIT,
       cooldownMs: AUTOPILOT_COOLDOWN_MS,
+      maxConcurrent: 1,
+      activeWindowMs: 5 * 60_000,
     });
     if (!decision.allowed) {
       return NextResponse.json(
@@ -84,18 +89,12 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
       status: "running",
       objective: body.objective || null,
       context: body.context || null,
-      metadata: { type: runType, run_date: today, agent_name: "Atlas" },
+      started_at: new Date().toISOString(),
+      metadata: { type: runType, run_date: today, agent_name: "Atlas", execution_provider: "openai" },
     }).select("id").single();
-    if (runError?.code === "23505") {
-      return NextResponse.json(
-        { error: "The Growth Department already has a run in progress.", retryAfterSeconds: 60 },
-        { status: 429, headers: { "Retry-After": "60" } }
-      );
-    }
     if (runError) throw runError;
     runId = run.id;
 
-    // Count every external AI call, including failed ones, against the owner's configured budget.
     await recordEstimatedSpend(supabase, user.id, "growth", 8, "orchestrator", runType);
 
     const { value: plan, raw: output } = await callOpenAIStructuredText<AutopilotPlan>({
@@ -172,7 +171,8 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
     const { error: completedRunError } = await supabase.from("marketing_agent_runs").update({
       status: "completed",
       output,
-      metadata: { type: runType, run_date: today, campaign_id: campaign.id, agent_name: "Atlas" },
+      finished_at: new Date().toISOString(),
+      metadata: { type: runType, run_date: today, campaign_id: campaign.id, agent_name: "Atlas", execution_provider: "openai" },
     }).eq("id", runId);
     if (completedRunError) throw completedRunError;
 
@@ -183,13 +183,15 @@ Create 7 distinct content items with at least 3 priority Reels, 6 practical task
     if (runId) {
       await supabase.from("marketing_agent_runs").update({
         status: "failed",
-        metadata: { type: runType, run_date: today, agent_name: "Atlas", error: message },
+        finished_at: new Date().toISOString(),
+        error_message: message,
+        metadata: { type: runType, run_date: today, agent_name: "Atlas", execution_provider: "openai", error: message },
       }).eq("id", runId);
     }
     const userMessage = message.includes("incomplete")
-      ? "Atlas could not finish the plan cleanly. Wait one minute, then run Morning Autopilot again."
+      ? "Atlas could not finish the plan cleanly. Try Morning Autopilot again."
       : message;
-    const status = message.includes("turned off") || message.includes("budget reached") ? 429 : 500;
+    const status = message.includes("turned off") || message.includes("budget reached") || message.includes("execution lanes") ? 429 : 500;
     return NextResponse.json({ error: userMessage }, { status });
   }
 }
