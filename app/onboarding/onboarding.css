@@ -1,0 +1,13 @@
+@layer components {
+  .py-textarea {
+    @apply w-full min-h-[96px] resize-none rounded-[14px] border border-border bg-surface px-4 py-3.5 text-[14px] leading-relaxed text-text-1 outline-none transition;
+  }
+  .py-textarea::placeholder { color: var(--text-3); }
+  .py-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .py-animate-in,
+  .py-liquid-button,
+  [class*="transition"] { animation: none !important; transition-duration: 0.01ms !important; }
+}
