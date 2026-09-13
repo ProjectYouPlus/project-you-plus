@@ -123,7 +123,7 @@ a { text-decoration: none; }
   .py-check-done { border-color: rgba(54,217,139,.34); background: rgba(54,217,139,.15); color: #5CF0A5; box-shadow: 0 0 18px rgba(54,217,139,.10), inset 0 1px 0 rgba(255,255,255,.10); }
 }
 
-.py-trajectory-card { position:relative; overflow:hidden; border-radius:30px; border:1px solid rgba(255,255,255,.105); padding:20px; background: radial-gradient(circle at 19% 16%,rgba(169,112,255,.23),transparent 34%), radial-gradient(circle at 95% 92%,rgba(82,35,145,.24),transparent 38%), linear-gradient(145deg,rgba(24,19,40,.89),rgba(10,9,17,.92)); box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 30px 90px rgba(31,12,66,.34); -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%); }
+.py-trajectory-card { position:relative; overflow:hidden; border-radius:30px; border:1px solid rgba(255,255,255,.105); padding:20px; background: radial-gradient(circle at 19% 16%,rgba(169,112,255,.23),transparent 34%), radial-gradient(circle at 95% 92%,rgba(82,35,145,.24),transparent 38%), linear-gradient(145deg,rgba(24,19,40,.89),rgba(10,9,17,.92)); isolation:isolate; clip-path:inset(0 round 30px); box-shadow:inset 0 1px 0 rgba(255,255,255,.12); -webkit-backdrop-filter:blur(30px) saturate(160%); backdrop-filter:blur(30px) saturate(160%); }
 .py-trajectory-card::after { content:""; position:absolute; inset:-45% 52% 42% -22%; pointer-events:none; transform:rotate(-18deg); background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent); filter:blur(4px); }
 .py-dashboard-hero { position:relative; isolation:isolate; overflow:hidden; border:1px solid rgba(255,255,255,.11); border-radius:30px; padding:17px; background:radial-gradient(circle at 82% 6%,rgba(180,126,255,.28),transparent 34%),radial-gradient(circle at 12% 110%,rgba(76,35,145,.3),transparent 45%),linear-gradient(145deg,#171126 0%,#0c0915 54%,#08070d 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 28px 80px rgba(42,20,82,.32); }
 .py-dashboard-orb { position:absolute; right:-52px; top:-68px; width:190px; height:190px; border-radius:999px; background:rgba(167,104,255,.2); filter:blur(42px); animation:pyDashboardGlow 7s ease-in-out infinite alternate; }
@@ -165,3 +165,9 @@ a { text-decoration: none; }
 @media (max-width:420px){ .py-trajectory-card{padding:18px 16px}.py-calendar-day{min-height:54px;border-radius:11px} }
 @media (max-width:767px){ body{background-color:var(--bg);} .py-card{box-shadow:none;} }
 @media (prefers-reduced-motion:reduce){ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;} }
+
+/* Keep iOS from zooming editable controls on focus without disabling pinch zoom. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]),
+  textarea, select, [contenteditable="true"] { font-size: 16px !important; }
+}
