@@ -19,7 +19,7 @@ export function composeCoachResponse(analysis: CoachAnalysis, snapshot: CoachCon
   if (!analysis.insights.length) return insufficient(snapshot);
   const primary = analysis.insights[0];
   const direct = directAnswer(analysis, snapshot);
-  const lines = [direct, "", "Observation", primary.observation, "", "Why it matters", primary.recommendation?.reason ?? meaning(primary, snapshot), "", "Recommended action", recommendationText(analysis), "", "Expected impact", primary.recommendation?.expectedImpact ?? "This focuses the next decision on the strongest available evidence without adding unnecessary commitments."];
+  const lines = [...new Set([direct, primary.observation, recommendationText(analysis)].filter(Boolean))].flatMap((paragraph, index) => index ? ["", paragraph] : [paragraph]);
   if (analysis.actions.length) lines.push("", `Review the proposed change below, then confirm it before Project You+ updates anything.`);
   if (snapshot.missing.length) lines.push("", `Missing context: ${snapshot.missing.join("; ")}.`);
   return lines.join("\n");

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CoachMessageContent } from "./coach-message";
 import { useRouter } from "next/navigation";
 import { useRef,useState } from "react";
 import type { CoachMessage } from "@/lib/types";
@@ -25,7 +26,7 @@ export function CoachChat({contextSummary,contextReady,initialMessages=EMPTY_MES
  return <div className="flex min-h-[590px] flex-col">
   <div className="border-b border-white/[.06] px-4 pb-3 pt-4 sm:px-6"><div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-semibold uppercase tracking-[.15em] text-accent-text">Project You+ Intelligence</div><div className="mt-1 text-[11.5px] text-text-3">Grounded in what you have actually added</div></div>{intelligenceMode&&<span className="py-glass-pill">{intelligenceMode==="openai"||intelligenceMode==="anthropic"?"Cloud AI live":intelligenceMode==="local-fallback"?"Local fallback":"Local intelligence"}</span>}</div><div className="mt-4 grid grid-cols-3 gap-2">{MODES.map(mode=>{const active=coachMode===mode.id;return <button key={mode.id} onClick={()=>setCoachMode(mode.id)} className={`py-pressable rounded-[15px] border px-3 py-2.5 text-left ${active?"border-accent/40 bg-accent-soft":"border-white/[.06] bg-white/[.025]"}`}><span className={`block text-[12px] font-semibold ${active?"text-text-1":"text-text-2"}`}>{mode.label}</span><span className="mt-0.5 hidden text-[9px] text-text-3 sm:block">{mode.sub}</span></button>;})}</div></div>
   <div ref={listRef} className="flex-1 overflow-y-auto px-4 pt-5 sm:px-6">
-   {messages.map(message=><div key={message.id} className={`mb-3 flex ${message.role==="user"?"justify-end":"justify-start"}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-[19px] px-4 py-3 text-[13.5px] leading-relaxed ${message.role==="user"?"border border-white/10 bg-accent text-white shadow-[0_10px_28px_rgba(124,58,237,.22)]":"border border-white/[.06] bg-white/[.035] text-text-1 backdrop-blur-xl"}`}>{message.content}</div></div>)}
+   {messages.map(message=><div key={message.id} className={`mb-3 flex ${message.role==="user"?"justify-end":"justify-start"}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-[19px] px-4 py-3 text-[13.5px] leading-relaxed ${message.role==="user"?"border border-white/10 bg-accent text-white shadow-[0_10px_28px_rgba(124,58,237,.22)]":"border border-white/[.06] bg-white/[.035] text-text-1 backdrop-blur-xl"}`}>{message.role === "assistant" ? <CoachMessageContent content={message.content}/> : message.content}</div></div>)}
    {recommendations.filter(item=>item.state==="pending"||item.state==="accepted").map(item=><RecommendationCard key={item.id} item={item} pending={isPending} onChange={changeRecommendation}/>)}
    {actionError&&<div className="mb-3 rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 py-2 text-[11px] text-red-200">{actionError}</div>}
    {isPending&&<div className="mb-3 flex justify-start"><div className="rounded-[18px] border border-white/[.06] bg-white/[.03] px-4 py-3 text-[12px] text-text-3">Reading your context…</div></div>}
