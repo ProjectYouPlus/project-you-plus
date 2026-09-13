@@ -26,11 +26,14 @@ export function BottomNav() {
       if (!isEditable()) { fullHeight = height; setEditing(false); }
       else setEditing(fullHeight - height > 100);
     };
+    const onKeyboardHide = () => setEditing(false);
+    window.addEventListener("keyboardDidHide", onKeyboardHide);
     document.addEventListener("focusin", onFocus);
     document.addEventListener("focusout", onBlur);
     viewport?.addEventListener("resize", onResize);
     window.addEventListener("resize", onResize);
     return () => {
+      window.removeEventListener("keyboardDidHide", onKeyboardHide);
       cancelAnimationFrame(frame);
       document.removeEventListener("focusin", onFocus);
       document.removeEventListener("focusout", onBlur);
