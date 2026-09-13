@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CoachComposer } from "./coach-composer";
 import { CoachMessageContent } from "./coach-message";
 import { useRouter } from "next/navigation";
-import { useRef,useState } from "react";
+import { useEffect,useRef,useState } from "react";
 import type { CoachMessage } from "@/lib/types";
 
 type CoachMode="decide"|"plan"|"reflect";
@@ -19,6 +19,8 @@ export function CoachChat({contextSummary,contextReady,initialMessages=EMPTY_MES
  const initial:CoachMessage[]=initialMessages.length?initialMessages:[{id:"welcome",role:"assistant",content:contextReady?`I’m reading your real Project You+ context: ${contextSummary} What decision do you want to make?`:`${contextSummary} Start by asking me what to set up first.`}];
  const[messages,setMessages]=useState<CoachMessage[]>(initial),[recommendations,setRecommendations]=useState<CoachRecommendation[]>([]),[actionError,setActionError]=useState<string|null>(null),[input,setInput]=useState("");
  const[coachMode,setCoachMode]=useState<CoachMode>("decide"),[intelligenceMode,setIntelligenceMode]=useState<IntelligenceMode|null>(null),[suggestions,setSuggestions]=useState(initialPrompts??PROMPTS.decide),[isPending,setIsPending]=useState(false);const listRef=useRef<HTMLDivElement>(null);
+
+ useEffect(()=>{const list=listRef.current;if(list)list.scrollTop=list.scrollHeight},[messages.length,isPending]);
 
  function send(text:string){const trimmed=text.trim();if(!trimmed||isPending)return;const prior=messages.filter(m=>m.id!=="welcome").map(({role,content})=>({role,content}));setMessages(current=>[...current,{id:`u-${Date.now()}`,role:"user",content:trimmed}]);setInput("");setActionError(null);setIsPending(true);void(async()=>{try{const response=await fetch("/api/coach",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({message:trimmed,history:prior,coachMode})});if(!response.ok)throw new Error("Coach request failed");const data=await response.json() as {reply?:string;mode?:IntelligenceMode;recommendations?:CoachRecommendation[];suggestions?:string[]};setIntelligenceMode(data.mode??null);setRecommendations(data.recommendations??[]);if(data.suggestions?.length)setSuggestions(data.suggestions);setMessages(current=>[...current,{id:`a-${Date.now()}`,role:"assistant",content:data.reply||"I couldn’t generate a response."}]);}catch{setMessages(current=>[...current,{id:`a-${Date.now()}`,role:"assistant",content:"I couldn’t reach the intelligence layer. Try again in a moment."}]);}finally{setIsPending(false);requestAnimationFrame(()=>{const list=listRef.current;if(list)list.scrollTo({top:list.scrollHeight,behavior:"smooth"});});}})();}
 
