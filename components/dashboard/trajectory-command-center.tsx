@@ -34,7 +34,7 @@ export function TrajectoryCommandCenter(props:TrajectoryProps){
  return <main className="py-mobile-shell md:py-shell-narrow">
   <header className="py-dashboard-hero mb-5">
    <div className="py-dashboard-orb"/><div className="py-dashboard-shine"/>
-   <div className="relative z-10 flex items-center justify-between gap-3"><ProjectYouLogo className="text-[14px] font-semibold" markClassName="h-7 w-7"/><Link href="/you" className="py-dashboard-avatar">{props.firstName.slice(0,2).toUpperCase()}</Link></div>
+   <div className="relative z-10 flex items-center justify-between gap-3"><ProjectYouLogo className="text-[14px] font-semibold" showMark={false}/><Link href="/you" className="py-dashboard-avatar">{props.firstName.slice(0,2).toUpperCase()}</Link></div>
    <div className="relative z-10 mt-7 grid grid-cols-[1fr_auto] items-end gap-4"><div><div className="text-[10px] font-semibold uppercase tracking-[.18em] text-violet-200/65">{longDate(props.today)}</div><h1 className="m-0 mt-2 text-[31px] font-semibold leading-[1.02] tracking-[-.052em] text-white">{daypart()},<br/>{props.firstName}</h1><p className="m-0 mt-2 text-[11px] text-white/48">Build the 1% version of yourself.</p></div><div className="py-dashboard-progress" style={{background:`conic-gradient(#b991ff ${Math.max(0,Math.min(100,props.currentScore))*3.6}deg,rgba(255,255,255,.1) 0deg)`}}><div><b>{props.currentScore}</b><span>today</span></div></div></div>
    <div className="relative z-10 mt-6 flex items-center gap-2.5"><Link href="/run-my-day" className="py-dashboard-cta"><span>Plan my day</span><span className="text-[15px]">✦</span></Link><div className="py-dashboard-streak"><span className="py-dashboard-pulse"/>{props.streak} day momentum</div></div>
   </header>
