@@ -45,5 +45,5 @@ export function CoachViewport({ children }: { children: ReactNode }) {
     };
   }, []);
   if (!frame) return children;
-  return createPortal(<div className="group fixed inset-x-0 top-0 z-30 overflow-hidden bg-bg" data-keyboard={frame.keyboard} style={{ height: frame.height, paddingBottom: frame.keyboard ? 0 : 100 }}>{children}</div>, document.body);
+  return createPortal(<div className="group fixed inset-x-0 top-0 z-30 overflow-hidden bg-bg" data-keyboard={frame.keyboard} style={{ height: frame.height, paddingBottom: frame.keyboard ? 0 : "calc(90px + max(24px, env(safe-area-inset-bottom)))" }}>{children}</div>, document.body);
 }
