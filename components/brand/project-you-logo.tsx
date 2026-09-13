@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 
-type LogoProps = { className?: string; markClassName?: string; compact?: boolean };
+type LogoProps = { className?: string; markClassName?: string; compact?: boolean; showMark?: boolean };
 
-export function ProjectYouLogo({ className, markClassName, compact = false }: LogoProps) {
+export function ProjectYouLogo({ className, markClassName, compact = false, showMark = true }: LogoProps) {
   return (
     <div className={cn("flex items-center gap-2.5", className)} aria-label="Project You+">
-      <ProjectYouMark className={markClassName} />
+      {showMark && <ProjectYouMark className={markClassName} />}
       {!compact && (
         <div className="leading-none tracking-[-0.04em]">
           <span className="text-text-1">Project </span>
